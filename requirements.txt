@@ -9,3 +9,6 @@ python-dotenv
 aiofiles
 pydantic-settings
 opencv-python-headless
+pytesseract
+PyMuPDF
+pdf2image
