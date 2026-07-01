@@ -103,7 +103,7 @@ SmartFill AI starting up
 Pipeline pre-warmed and ready
 ```
 
-Open `http://127.0.0.1:8000/docs` in your browser to see the interactive API docs.
+Open "https://web-production-a52e0.up.railway.app" in your browser to see the interactive API docs.
 
 ### 6. Load the Chrome Extension
 
@@ -367,7 +367,7 @@ PYTHONPATH=. uvicorn backend.app.main:app --reload
 
 **Extension shows "Backend offline"**
 Make sure the backend is running on port 8000 and the extension has
-`host_permissions` for `http://127.0.0.1:8000/*` in `manifest.json`.
+`host_permissions` for "https://web-production-a52e0.up.railway.app"` in `manifest.json`.
 
 **Low confidence on real Aadhaar cards**
 Phone photos taken at an angle produce low-confidence results. Scan flat,

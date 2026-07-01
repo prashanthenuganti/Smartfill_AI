@@ -1,7 +1,7 @@
 /**
  * popup.js — Milestone 3 (fixed)
  *
- * Profile source: GET http://127.0.0.1:8000/api/v1/get-session
+ * Profile source: GET https://web-production-a52e0.up.railway.app/api/v1/get-session
  * No chrome.storage complexity — backend holds the session.
  *
  * Flow:
@@ -14,7 +14,7 @@
 
 "use strict";
 
-const API = "http://127.0.0.1:8000";
+const API = "https://web-production-a52e0.up.railway.app";
 
 const PROFILE_DISPLAY = [
   { key: "name",            label: "Name" },

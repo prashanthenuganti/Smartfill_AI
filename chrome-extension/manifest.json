@@ -24,7 +24,7 @@
     "tabs"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8000/*",
+    "https://web-production-a52e0.up.railway.app/*",
     "<all_urls>"
   ],
   "content_security_policy": {

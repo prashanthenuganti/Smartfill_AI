@@ -697,7 +697,7 @@ async function confirmAndUse(){
   var btn=document.getElementById("useBtn"),msg=document.getElementById("saveMsg");
   btn.disabled=true;btn.textContent="Saving…";
   try{
-    var res=await fetch("http://127.0.0.1:8000/api/v1/save-session",{
+    var res=await fetch("https://web-production-a52e0.up.railway.app/api/v1/save-session",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({profile:final})
     });
