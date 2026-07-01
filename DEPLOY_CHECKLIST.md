@@ -80,7 +80,7 @@ const BACKEND_URL = "https://web-production-a52e0.up.railway.app";
 with:
 
 ```js
-const BACKEND_URL = "https://<your-app>.up.railway.app";
+const BACKEND_URL = "https://web-production-a52e0.up.railway.app";
 ```
 
 If you added the API key gate, also add the header to every fetch call:
