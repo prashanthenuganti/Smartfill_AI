@@ -8,3 +8,4 @@ pydantic
 python-dotenv
 aiofiles
 pydantic-settings
+opencv-python-headless
