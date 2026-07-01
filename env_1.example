@@ -1,0 +1,24 @@
+# Copy these into Railway's Variables tab (Project -> Service -> Variables)
+# Do NOT commit a real .env file with secrets to git.
+
+# --- Vision LLM engine selection ---
+VISION_ENGINE=gemini
+# VISION_ENGINE=claude
+
+# --- API keys (set whichever engine(s) you use) ---
+GEMINI_API_KEY=
+ANTHROPIC_API_KEY=
+
+# --- Simple shared-key gate for the backend (recommended before going public) ---
+# The Chrome extension will send this in a header (e.g. X-API-Key) on every request.
+SMARTFILL_API_KEY=
+
+# --- CORS ---
+# Chrome extensions call your backend from an extension origin like:
+# chrome-extension://<your-extension-id>
+# Add it here once you know the ID (after first "Load unpacked" or Web Store listing).
+ALLOWED_ORIGINS=chrome-extension://REPLACE_WITH_EXTENSION_ID
+
+# --- Misc ---
+ENVIRONMENT=production
+PORT=8000

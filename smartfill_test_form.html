@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SmartFill Test Form</title>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 20px; }
+  .field { margin-bottom: 20px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .required { color: #c0392b; }
+  input[type="text"], input[type="date"] {
+    width: 100%; padding: 10px; font-size: 15px;
+    border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+  }
+  .hint { font-size: 12px; color: #777; margin-top: 4px; }
+  button { padding: 10px 24px; font-size: 15px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>SmartFill Test Form</h1>
+<p>Use this page to test SmartFill AI autofill before testing on the real SSC portal.</p>
+
+<form>
+
+  <div class="field">
+    <label for="fullName">2. Candidate Name (As per Matriculation Certificate) <span class="required">*</span></label>
+    <input type="text" id="fullName" name="fullName" placeholder="Enter full name">
+  </div>
+
+  <div class="field">
+    <label for="dob">5. Date Of Birth (DD-MM-YYYY) <span class="required">*</span></label>
+    <input type="text" id="dob" name="dob" placeholder="dd-mm-yyyy">
+    <div class="hint">Date of Birth should be same as mentioned in Matriculation Certificate.</div>
+  </div>
+
+  <div class="field">
+    <label for="idMarks">4. Visible Identification Marks <span class="required">*</span></label>
+    <input type="text" id="idMarks" name="idMarks" placeholder="e.g. A mole on the neck">
+  </div>
+
+  <button type="button" onclick="alert('This is a test page — nothing is submitted.')">Save &amp; Next</button>
+
+</form>
+
+</body>
+</html>

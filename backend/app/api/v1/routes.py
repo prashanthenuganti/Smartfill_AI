@@ -1,0 +1,675 @@
+"""
+api/v1/routes.py — Milestone 2
+"""
+from __future__ import annotations
+import time
+from pathlib import Path
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi.responses import HTMLResponse, JSONResponse
+
+from backend.app.core.exceptions import (
+    CorruptedFileError, FileTooLargeError, UnsupportedFileTypeError,
+)
+from backend.app.core.logging import get_logger
+from backend.app.schemas.documents import (
+    DOCUMENT_LABELS, MILESTONE_2_TYPES, DocumentType, UploadedFile,
+)
+from backend.app.schemas.errors import ErrorCode, ErrorResponse
+from backend.app.schemas.extraction import (
+    ExtractionResult, DocumentStatus, ProcessingResponse,
+)
+from backend.app.services.merger.field_merger import FieldMerger
+from backend.app.services.pipeline.orchestrator import DocumentPipeline
+from backend.app.utils.file_validator import validate_and_save
+
+logger = get_logger(__name__)
+router = APIRouter()
+
+_pipeline_instance: Optional[DocumentPipeline] = None
+_merger_instance:   Optional[FieldMerger]       = None
+
+
+def get_pipeline() -> DocumentPipeline:
+    global _pipeline_instance
+    if _pipeline_instance is None:
+        _pipeline_instance = DocumentPipeline()
+    return _pipeline_instance
+
+
+def get_merger() -> FieldMerger:
+    global _merger_instance
+    if _merger_instance is None:
+        _merger_instance = FieldMerger()
+    return _merger_instance
+
+
+PipelineDep = Annotated[DocumentPipeline, Depends(get_pipeline)]
+MergerDep   = Annotated[FieldMerger,      Depends(get_merger)]
+
+
+def _error(http_status: int, error_code: str, message: str,
+           details: dict | None = None) -> JSONResponse:
+    body = ErrorResponse(error_code=error_code, message=message,
+                         details=details or {})
+    return JSONResponse(status_code=http_status, content=body.model_dump())
+
+
+# ── Pages ─────────────────────────────────────────────────────────────────────
+
+@router.get("/app", response_class=HTMLResponse, include_in_schema=False)
+async def upload_page():
+    html_path = Path(__file__).parents[4] / "frontend" / "upload.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>upload.html not found</h1>", status_code=404)
+
+
+@router.get("/review", response_class=HTMLResponse, include_in_schema=False)
+async def review_page():
+    html_path = Path(__file__).parents[4] / "frontend" / "review.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>review.html not found</h1>", status_code=404)
+
+
+# ── API ───────────────────────────────────────────────────────────────────────
+
+@router.get("/api/v1/health")
+async def health_check() -> dict:
+    return {"status": "ok", "service": "SmartFill AI", "version": "2.0.0"}
+
+
+# ── Session profile storage ───────────────────────────────────────────────────
+# Simple in-memory store — one active session at a time per server.
+# Production: replace with Redis or database.
+
+_active_session: dict = {}   # stores the confirmed customer profile
+
+
+@router.post("/api/v1/save-session")
+async def save_session(request: Request) -> JSONResponse:
+    """Called by review page when operator clicks 'Use This Data'."""
+    global _active_session
+    body = await request.json()
+    profile = body.get("profile", {})
+    if not profile:
+        return JSONResponse({"ok": False, "error": "Empty profile"}, status_code=400)
+    _active_session = profile
+    field_count = sum(1 for v in profile.values() if v and isinstance(v, str))
+    logger.info("Session saved | fields=%d", field_count)
+    return JSONResponse({"ok": True, "fields": field_count})
+
+
+@router.get("/api/v1/get-session")
+async def get_session() -> JSONResponse:
+    """Called by Chrome Extension popup to get the current profile."""
+    if not _active_session:
+        return JSONResponse({"ok": False, "profile": None})
+    return JSONResponse({"ok": True, "profile": _active_session})
+
+
+@router.delete("/api/v1/clear-session")
+async def clear_session() -> JSONResponse:
+    """Clear the active session."""
+    global _active_session
+    _active_session = {}
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/v1/document-types")
+async def document_types() -> dict:
+    return {
+        "types": [
+            {"value": dt.value, "label": DOCUMENT_LABELS[dt]}
+            for dt in MILESTONE_2_TYPES
+            if dt != DocumentType.AUTO
+        ]
+    }
+
+
+@router.post("/api/v1/process-session")
+async def process_session(
+    pipeline: PipelineDep,
+    merger: MergerDep,
+    request: Request,
+    files: list[UploadFile] = File(default=[]),
+    document_types: str = Form(default=""),
+    manual_mobile: str = Form(default=""),
+    manual_email: str = Form(default=""),
+) -> JSONResponse:
+    """
+    Process one file per document type slot.
+    document_types: comma-separated list matching files order.
+    e.g. "aadhaar,pan,certificate_degree"
+    """
+    start_ms = time.monotonic() * 1000
+
+    if len(files) > 10:
+        return _error(400, "TOO_MANY_FILES", "Maximum 10 files per session.")
+    # Allow session with no files if manual inputs provided
+    if not files and not manual_mobile and not manual_email:
+        return _error(400, ErrorCode.NO_FILE_PROVIDED, "Provide at least one document or contact detail.")
+
+    # Parse declared types
+    type_list = [t.strip() for t in document_types.split(",") if t.strip()]
+    while len(type_list) < len(files):
+        type_list.append("aadhaar")  # default — never auto
+
+    # Validate + save each file
+    uploaded: list[UploadedFile] = []
+    filenames: list[str] = []
+    doc_type_enums: list[DocumentType] = []
+
+    for upload, dt_str in zip(files, type_list):
+        try:
+            try:
+                dt = DocumentType(dt_str)
+            except ValueError:
+                dt = DocumentType.AUTO
+            validated = await validate_and_save(upload, dt)
+            uploaded.append(validated)
+            filenames.append(upload.filename or f"doc_{len(uploaded)}")
+            doc_type_enums.append(dt)
+        except FileTooLargeError as exc:
+            return _error(413, ErrorCode.FILE_TOO_LARGE, exc.message, exc.details)
+        except UnsupportedFileTypeError as exc:
+            return _error(400, ErrorCode.UNSUPPORTED_FILE_TYPE, exc.message, exc.details)
+        except CorruptedFileError as exc:
+            return _error(400, ErrorCode.CORRUPTED_FILE, exc.message, exc.details)
+
+    # Run pipeline on each file
+    try:
+        pipeline_response = await pipeline.process(uploaded)
+    except Exception as exc:
+        logger.error("Pipeline error | %s", exc)
+        return _error(500, ErrorCode.INTERNAL_ERROR, "Processing error. Please try again.")
+
+    # Build ExtractionResult list for merger — one per uploaded file
+    # Build ExtractionResult list for merger
+    # IMPORTANT: use pipeline_response.documents (full extraction with ALL fields)
+    # not just .aadhaar/.pan typed schemas (which only have 6 fields each)
+    extraction_results: list[ExtractionResult] = []
+
+    # First add results that have full DocumentExtraction (all fields including address)
+    doc_idx = 0
+    for i, dt in enumerate(doc_type_enums):
+        # Try to find matching DocumentExtraction in documents list
+        doc_extraction = None
+        if doc_idx < len(pipeline_response.documents):
+            doc_extraction = pipeline_response.documents[doc_idx]
+            doc_idx += 1
+
+        result = ExtractionResult(
+            document_type=dt.value,
+            status=DocumentStatus.SUCCESS,
+        )
+
+        # Set full extraction (has ALL fields: address, mobile, etc.)
+        # Use detected type from extraction (handles AUTO classification)
+        if doc_extraction:
+            result.extraction = doc_extraction
+            detected_type = doc_extraction.document_type  # e.g. "pan", "aadhaar"
+            result.document_type = detected_type           # override "auto"
+        else:
+            detected_type = dt.value
+
+        # Set typed schemas using detected type, not declared type
+        if detected_type == "aadhaar" and pipeline_response.aadhaar:
+            result.aadhaar = pipeline_response.aadhaar
+        elif detected_type == "pan" and pipeline_response.pan:
+            result.pan = pipeline_response.pan
+
+        extraction_results.append(result)
+
+    # Merge fields
+    try:
+        profile = merger.merge(extraction_results, filenames)
+        profile.processing_time_ms = round((time.monotonic() * 1000) - start_ms, 1)
+    except Exception as exc:
+        logger.error("Merge error | %s", exc)
+        return _error(500, ErrorCode.INTERNAL_ERROR, f"Field merging failed: {exc}")
+
+    # Document summary for UI
+    doc_summary = []
+    for result, filename in zip(extraction_results, filenames):
+        # Use detected type from extraction if available, never show "auto"
+        display_type = result.document_type
+        if display_type == "auto" and result.extraction:
+            display_type = result.extraction.document_type
+        doc_summary.append({
+            "type":       display_type,
+            "filename":   filename,
+            "status":     result.status,
+            "confidence": result.avg_confidence,
+            "engine":     result.ocr_engine_used,
+        })
+
+    logger.info(
+        "Session complete | docs=%d | fields=%d | verified=%d | time=%.0fms",
+        len(files), profile.total_fields_extracted,
+        profile.verified_fields, profile.processing_time_ms,
+    )
+
+    # Inject manually entered contact details directly into profile
+    profile_dict = profile.model_dump()
+    if manual_mobile and manual_mobile.strip():
+        profile_dict["mobile"] = manual_mobile.strip()
+    if manual_email and manual_email.strip():
+        profile_dict["email"] = manual_email.strip()
+
+    return JSONResponse(status_code=200, content={
+        "status":          "success",
+        "profile":         profile_dict,
+        "documents":       doc_summary,
+        "processing_time_ms": profile.processing_time_ms,
+    })
+
+
+# ── Milestone 1 compatibility ─────────────────────────────────────────────────
+
+@router.post("/api/v1/process", response_model=ProcessingResponse)
+async def process_documents(
+    pipeline: PipelineDep,
+    aadhaar_file: Optional[UploadFile] = File(default=None),
+    pan_file: Optional[UploadFile] = File(default=None),
+) -> JSONResponse:
+    if not aadhaar_file and not pan_file:
+        return _error(400, ErrorCode.NO_FILE_PROVIDED, "At least one document required.")
+
+    uploaded: list[UploadedFile] = []
+    for upload, dt in [(aadhaar_file, DocumentType.AADHAAR), (pan_file, DocumentType.PAN)]:
+        if not upload:
+            continue
+        try:
+            uploaded.append(await validate_and_save(upload, dt))
+        except FileTooLargeError as exc:
+            return _error(413, ErrorCode.FILE_TOO_LARGE, exc.message, exc.details)
+        except UnsupportedFileTypeError as exc:
+            return _error(400, ErrorCode.UNSUPPORTED_FILE_TYPE, exc.message, exc.details)
+        except CorruptedFileError as exc:
+            return _error(400, ErrorCode.CORRUPTED_FILE, exc.message, exc.details)
+
+    try:
+        response = await pipeline.process(uploaded)
+    except Exception as exc:
+        logger.error("Pipeline error | %s", exc)
+        return _error(500, ErrorCode.INTERNAL_ERROR, "Processing error.")
+
+    return JSONResponse(status_code=200, content=response.model_dump())
+
+
+# ── AI Field Mapping endpoint ─────────────────────────────────────────────────
+
+@router.post("/api/v1/map-fields", summary="Map page form fields to customer profile")
+async def map_fields(request: Request) -> JSONResponse:
+    request = await request.json()
+    """
+    Takes scanned form fields from the Chrome Extension and the customer
+    profile, returns a mapping of field selectors to profile keys.
+
+    Uses Haiku to intelligently match form field labels to profile fields —
+    handles different languages, abbreviations, and field orderings used
+    by different government portals.
+    """
+    import anthropic
+    from backend.app.core.config import get_settings
+
+    settings = get_settings()
+    profile: dict = request.get("profile", {})
+    fields: list = request.get("fields", [])
+
+    # Synthesize a generic 'marks_identification' key for forms that have
+    # ONE generic "Identification Marks" / "Visible Identification Marks"
+    # field rather than separate SSC/Inter/Degree-specific ones (the common
+    # case — government forms ask for this once, not per-certificate).
+    # Prefer the most senior certificate's value (degree > inter > ssc)
+    # since that's usually the most recently issued/most relevant one,
+    # falling back to whichever is actually populated.
+    if not profile.get("marks_identification"):
+        for key in ("degree_marks_identification", "inter_marks_identification", "ssc_marks_identification"):
+            if profile.get(key):
+                profile["marks_identification"] = profile[key]
+                break
+
+    if not fields:
+        return JSONResponse({"mapping": {}, "matched": 0})
+
+    # Build profile summary for the AI
+    profile_lines = [
+        f"  {k}: {v}"
+        for k, v in profile.items()
+        if v and k not in ("documents_processed", "fields_needing_review")
+    ]
+    profile_summary = "\n".join(profile_lines)
+
+    # Build field list for the AI
+    field_lines = [
+        f"  [{i}] id={f['id']!r} label={f['label']!r} type={f.get('type','text')} name={f.get('name','')!r}"
+        for i, f in enumerate(fields)
+    ]
+    field_list = "\n".join(field_lines)
+
+    prompt = f"""You are mapping HTML form fields to customer profile data for Indian government application forms.
+
+Customer Profile (only these keys exist):
+{profile_summary}
+
+Form Fields Found on Page:
+{field_list}
+
+Map each form field to the correct profile key. Consider all common labels used by Indian government portals.
+
+Profile keys:
+  PERSONAL:  name, father_name, mother_name, gender, dob, nationality, place_of_birth
+  CONTACT:   mobile, email, address, address_line1, address_line2, address_city,
+             address_district, address_state, address_pincode
+  IDs:       aadhaar_number, pan_number, passport_number, voter_id, dl_number
+  PASSPORT:  doi (date of issue), doe (date of expiry)
+  EDUCATION: degree, specialization, university, college, year_of_passing, percentage,
+             ssc_roll, ssc_percentage, inter_roll, inter_percentage,
+             ssc_marks_identification, inter_marks_identification, degree_marks_identification,
+             marks_identification (generic — use this for a single combined
+             "Identification Marks" field that isn't certificate-specific)
+  BANKING:   account_number, ifsc, bank_name, branch
+
+Matching rules — common Indian govt portal field names:
+  name         → "Applicant Name", "Full Name", "Name as per Aadhaar", "Name of Candidate"
+  father_name  → "Father Name", "Father's Name", "S/O", "D/O", "Guardian Name"
+  dob          → "Date of Birth", "DOB", "Birth Date", "Date of Birth (DD/MM/YYYY)"
+  aadhaar_number → "Aadhaar Number", "Aadhaar No", "UID Number", "UIDAI Number"
+  pan_number   → "PAN Number", "PAN No", "Permanent Account Number"
+  mobile       → "Mobile Number", "Mobile No", "Contact Number", "Phone Number", "Registered Mobile"
+  email        → "Email ID", "Email Address", "E-Mail ID"
+  gender       → "Gender", "Sex"
+  address_pincode → "PIN Code", "Pincode", "PIN No", "Postal Code"
+  doe          → "Date of Expiry", "Valid Till", "Expiry Date", "Passport Expiry"
+  doi          → "Date of Issue", "Issue Date"
+  marks_identification → "Identification Marks", "Visible Identification Marks", "Distinguishing Marks"
+
+NEVER map: captcha, OTP, password, confirm password, security code, search, upload fields.
+Return null for fields with no profile data.
+
+Return ONLY a JSON object like:
+{{"#aadhaarInput": "aadhaar_number", "#mobileNo": "mobile", "#captcha": null}}
+
+JSON now:"""
+
+    try:
+        if not settings.has_anthropic_key:
+            # Fallback: simple keyword matching without AI
+            mapping = _keyword_map_fields(fields, profile)
+        else:
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text if response.content else "{}"
+
+            import json, re
+            clean = re.sub(r"```(?:json)?\s*", "", raw).strip().strip("`")
+            match = re.search(r"\{.*\}", clean, re.DOTALL)
+            if match:
+                clean = match.group()
+            mapping = json.loads(clean)
+
+        # Only keep mappings where the profile has a value
+        mapping = {
+            k: v for k, v in mapping.items()
+            if v and profile.get(v)
+        }
+
+        logger.info(
+            "Field mapping | page_fields=%d | matched=%d",
+            len(fields), len(mapping),
+        )
+        return JSONResponse({"mapping": mapping, "matched": len(mapping)})
+
+    except Exception as exc:
+        logger.error("Field mapping error | %s", exc)
+        # Return keyword-based fallback
+        mapping = _keyword_map_fields(fields, profile)
+        return JSONResponse({"mapping": mapping, "matched": len(mapping)})
+
+
+def _keyword_map_fields(fields: list, profile: dict) -> dict:
+    """
+    Portal-aware keyword field mapper.
+    Covers UIDAI, NSDL, Passport, eDistrict, and generic govt portals.
+    Longer keyword wins (more specific match).
+    """
+    # Skip these always — never autofill
+    SKIP = {
+        "captcha","recaptcha","otp","one time","password","confirm password",
+        "re-enter","retype","verification code","security code",
+        "submit","search","upload","file","image","photo",
+    }
+
+    # (profile_key, [keywords ordered most-specific first])
+    RULES = [
+        # ── Identity ────────────────────────────────────────────────────────
+        ("aadhaar_number", [
+            "aadhaar number","aadhaar no","aadhar number","aadhar no",
+            "uid number","uid no","uidai number","aadhaar","aadhar","uid",
+        ]),
+        ("pan_number", [
+            "permanent account number","pan card number","pan number","pan no","pan",
+        ]),
+        ("passport_number", [
+            "passport number","passport no","passport",
+        ]),
+        ("voter_id", [
+            "epic number","voter id number","voter card","voter id","epic",
+        ]),
+        ("dl_number", [
+            "driving licence number","driving license number","dl number","dl no",
+            "driving licence","driving license","licence number",
+        ]),
+
+        # ── Name ────────────────────────────────────────────────────────────
+        ("name", [
+            "applicant full name","applicant name","candidate full name",
+            "candidate name","full name of applicant","name of applicant",
+            "name of student","name of candidate","name of holder",
+            "account holder name","subscriber name","full name","your name",
+            "name as per aadhaar","name as per pan","name",
+        ]),
+        ("father_name", [
+            "father full name","father's full name","fathers full name",
+            "father name","father's name","fathers name",
+            "guardian name","guardian's name","s/o","d/o","w/o","parent name",
+        ]),
+        ("mother_name", [
+            "mother full name","mother's full name","mother name","mother's name",
+        ]),
+
+        # ── DOB ─────────────────────────────────────────────────────────────
+        ("dob", [
+            "date of birth","birth date","d.o.b","dob","date of birth (dd/mm/yyyy)",
+            "birth date (dd/mm/yyyy)","date of birth dd mm yyyy",
+        ]),
+
+        # ── Gender ──────────────────────────────────────────────────────────
+        ("gender", ["gender","sex"]),
+
+        # ── Contact ─────────────────────────────────────────────────────────
+        ("mobile", [
+            "mobile number","mobile no","phone number","phone no",
+            "contact number","contact no","cell number","whatsapp number",
+            "registered mobile","registered mobile number",
+            "mobile","phone","contact",
+        ]),
+        ("email", [
+            "email address","email id","e-mail address","e-mail id",
+            "email","e-mail","mail id","mail address",
+        ]),
+
+        # ── Address ─────────────────────────────────────────────────────────
+        ("address_line1", [
+            "address line 1","address line1","house number","flat number",
+            "door number","plot number","street address line 1",
+        ]),
+        ("address_line2", [
+            "address line 2","address line2","street","locality","area",
+            "street address line 2",
+        ]),
+        ("address_city", [
+            "city name","city / town","city/town","town name","city","town",
+        ]),
+        ("address_district", ["district name","district"]),
+        ("address_state",    ["state name","state"]),
+        ("address_pincode", [
+            "pin code","pincode","zip code","postal code","pin no","pin",
+        ]),
+        ("address", [
+            "permanent address","residential address","current address","address",
+        ]),
+
+        # ── Nationality ──────────────────────────────────────────────────────
+        ("nationality", ["nationality","citizenship"]),
+
+        # ── Passport-specific ────────────────────────────────────────────────
+        ("doe", [
+            "date of expiry","expiry date","valid till","valid upto",
+            "passport expiry","expiry","valid until",
+        ]),
+        ("doi", [
+            "date of issue","issue date","date of issue of passport",
+        ]),
+        ("place_of_birth", ["place of birth","birth place","city of birth"]),
+
+        # ── Education ────────────────────────────────────────────────────────
+        ("degree",          ["degree name","course name","programme","degree"]),
+        ("specialization",  ["specialization","branch","stream","subject"]),
+        ("university",      ["university name","university"]),
+        ("college",         ["college name","institution","college"]),
+        ("year_of_passing", ["year of passing","passing year","year of completion"]),
+        ("percentage",      ["percentage","marks percentage","cgpa","gpa"]),
+        ("ssc_roll",        ["ssc hall ticket","ssc roll","10th roll","hall ticket"]),
+        ("ssc_percentage",  ["ssc percentage","10th percentage","class 10"]),
+        ("inter_roll",      ["intermediate hall ticket","inter roll","12th roll"]),
+        ("inter_percentage",["intermediate percentage","inter percentage","12th percentage"]),
+        ("marks_identification", [
+            "visible identification marks","identification marks","identification mark",
+            "distinguishing marks","distinguishing mark","visible marks",
+        ]),
+
+        # ── Banking ──────────────────────────────────────────────────────────
+        ("account_number",  ["account number","bank account number","acc no"]),
+        ("ifsc",            ["ifsc code","ifsc"]),
+        ("bank_name",       ["bank name","name of bank"]),
+    ]
+
+    # Build combined text for each field
+    def field_text(f):
+        return " ".join([
+            f.get("label",""), f.get("name",""),
+            f.get("placeholder",""), f.get("ariaLabel",""),
+        ]).lower()
+
+    mapping = {}
+    for field in fields:
+        combined = field_text(field)
+
+        # Skip captcha/otp/password
+        if any(s in combined for s in SKIP):
+            continue
+        if not profile:
+            continue
+
+        best_key = None
+        best_score = 0
+
+        for profile_key, keywords in RULES:
+            if not profile.get(profile_key):
+                continue
+            for kw in keywords:
+                if kw in combined:
+                    score = len(kw)   # longer = more specific
+                    if score > best_score:
+                        best_score = score
+                        best_key = profile_key
+                    break  # first match wins for this profile_key
+
+        if best_key:
+            mapping[field["id"]] = best_key
+
+    return mapping
+
+
+# ── Document classifier endpoint ──────────────────────────────────────────────
+
+@router.post("/api/v1/classify", summary="Classify document type from image")
+async def classify_document(
+    pipeline: PipelineDep,
+    files: list[UploadFile] = File(default=[]),
+) -> JSONResponse:
+    """
+    Fast document type detection — runs OCR on a small thumbnail
+    and uses keyword classifier to detect document type.
+    Called by the upload page to show "✓ Aadhaar Detected" immediately.
+    Does NOT run full extraction — just classifies.
+    """
+    from backend.app.services.ai.classifier import DocumentClassifier
+    from backend.app.services.ocr.document_preprocessor import DocumentPreprocessor
+    import pytesseract, tempfile, shutil
+    from PIL import Image
+    import numpy as np, cv2
+
+    classifier = DocumentClassifier()
+    preprocessor = DocumentPreprocessor()
+    results = []
+
+    for upload in files[:10]:
+        tmp_path = None
+        try:
+            # Save to temp file
+            suffix = Path(upload.filename or "doc.jpg").suffix or ".jpg"
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            content_bytes = await upload.read()
+            tmp.write(content_bytes)
+            tmp.close()
+            tmp_path = Path(tmp.name)
+
+            # Quick preprocess — just resize to small thumbnail
+            try:
+                from PIL import Image as PILImage
+                img = PILImage.open(tmp_path).convert("RGB")
+                # Resize to 800px longest edge for fast OCR
+                w, h = img.size
+                scale = min(800 / max(w, h), 1.0)
+                if scale < 1.0:
+                    img = img.resize((int(w*scale), int(h*scale)), PILImage.LANCZOS)
+                arr = np.array(img)
+                grey = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+                text = pytesseract.image_to_string(grey, config="--oem 3 --psm 6")
+            except Exception:
+                text = ""
+
+            # Classify
+            if text.strip():
+                doc_type, confidence = classifier.classify(text)
+            else:
+                doc_type, confidence = DocumentType.AUTO, 0.0
+
+            results.append({
+                "filename": upload.filename,
+                "doc_type": doc_type.value,
+                "confidence": round(confidence, 2),
+            })
+
+        except Exception as exc:
+            logger.warning("Classify failed | file=%s | %s", upload.filename, exc)
+            results.append({
+                "filename": upload.filename,
+                "doc_type": "auto",
+                "confidence": 0.0,
+            })
+        finally:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+
+    return JSONResponse({"results": results})

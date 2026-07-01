@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmartFill AI</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f5f6fa;--surface:#fff;--elevated:#f0f1f5;--hover:#e8eaf0;
+      --border:#d8dce8;--accent:#2563eb;--accent-dim:#1d4ed8;
+      --accent-light:#eff4ff;--green:#16a34a;--green-light:#f0fdf4;
+      --green-border:#bbf7d0;--amber:#b45309;--red:#dc2626;
+      --text:#111827;--text-2:#4b5563;--text-3:#9ca3af;
+      --shadow:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 12px rgba(0,0,0,0.09);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      font-size:14px;color:var(--text);background:var(--bg);
+    }
+    body{min-height:100vh;display:flex;flex-direction:column;}
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .header{display:flex;align-items:center;justify-content:space-between;
+      padding:0 28px;height:56px;background:var(--surface);
+      border-bottom:2px solid var(--accent);box-shadow:var(--shadow);}
+    .brand{display:flex;align-items:center;gap:9px;}
+    .brand-logo{width:28px;height:28px;border-radius:6px;background:var(--accent);
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;}
+    .brand-name{font-size:16px;font-weight:800;letter-spacing:-0.4px;}
+    .brand-name em{font-style:normal;color:var(--accent);}
+    .status-pill{display:flex;align-items:center;gap:5px;padding:4px 11px;
+      border-radius:20px;background:var(--elevated);border:1px solid var(--border);
+      font-size:11px;color:var(--text-2);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);}
+    .status-dot.online{background:var(--green);}
+
+    /* ── Main layout ──────────────────────────────────────────────── */
+    .main{flex:1;display:flex;align-items:flex-start;justify-content:center;
+      padding:32px 20px;gap:24px;max-width:900px;margin:0 auto;width:100%;}
+
+    /* ── Left: upload area ────────────────────────────────────────── */
+    .upload-col{flex:1;display:flex;flex-direction:column;gap:14px;}
+
+    /* Drop zone */
+    .drop-zone{border:2.5px dashed var(--border);border-radius:14px;
+      background:var(--surface);text-align:center;padding:40px 24px;
+      cursor:pointer;transition:all 0.2s;position:relative;}
+    .drop-zone:hover,.drop-zone.drag-over{
+      border-color:var(--accent);background:var(--accent-light);}
+    .drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+    .drop-icon{font-size:44px;margin-bottom:12px;display:block;}
+    .drop-title{font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;}
+    .drop-sub{font-size:13px;color:var(--text-2);margin-bottom:16px;}
+    .drop-formats{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+    .fmt-badge{padding:3px 10px;border-radius:20px;background:var(--elevated);
+      border:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-2);}
+    .drop-limit{font-size:11px;color:var(--text-3);margin-top:8px;}
+
+    /* Contact inputs */
+    .contact-section{background:var(--surface);border:1.5px solid var(--border);
+      border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+    .contact-title{font-size:11px;font-weight:700;letter-spacing:0.6px;
+      text-transform:uppercase;color:var(--text-3);margin-bottom:10px;}
+    .contact-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .inp-group{display:flex;flex-direction:column;gap:4px;}
+    .inp-label{font-size:11px;font-weight:600;color:var(--text-2);}
+    .inp{padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;
+      font-size:13px;color:var(--text);outline:none;background:var(--bg);
+      transition:border-color 0.15s,box-shadow 0.15s;}
+    .inp:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+    .inp::placeholder{color:var(--text-3);}
+
+    /* ── Right: file list + extract ───────────────────────────────── */
+    .right-col{width:280px;flex-shrink:0;display:flex;flex-direction:column;
+      gap:14px;position:sticky;top:72px;}
+
+    /* File list card */
+    .files-card{background:var(--surface);border:1.5px solid var(--border);
+      border-radius:10px;overflow:hidden;box-shadow:var(--shadow-md);}
+    .files-header{padding:11px 14px;background:var(--elevated);
+      border-bottom:1px solid var(--border);
+      font-size:12px;font-weight:700;color:var(--text-2);
+      display:flex;align-items:center;justify-content:space-between;}
+    .files-count{font-size:11px;color:var(--text-3);font-weight:400;}
+    .files-empty{padding:28px 14px;text-align:center;color:var(--text-3);font-size:13px;}
+    .files-empty-icon{font-size:28px;margin-bottom:8px;}
+
+    .file-list{max-height:320px;overflow-y:auto;}
+    .file-item{display:flex;align-items:center;gap:10px;
+      padding:10px 14px;border-bottom:1px solid var(--border);
+      transition:background 0.1s;}
+    .file-item:last-child{border-bottom:none;}
+    .file-item.detecting{opacity:0.6;}
+    .file-icon{font-size:20px;flex-shrink:0;}
+    .file-info{flex:1;min-width:0;}
+    .file-name{font-size:12px;font-weight:600;color:var(--text);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .file-type{font-size:11px;margin-top:2px;}
+    .file-type.detected{color:var(--green);font-weight:600;}
+    .file-type.detecting{color:var(--text-3);}
+    .file-type.failed{color:var(--amber);}
+    .file-remove{background:none;border:none;color:var(--text-3);cursor:pointer;
+      font-size:15px;padding:3px 5px;border-radius:4px;flex-shrink:0;transition:all 0.15s;}
+    .file-remove:hover{background:var(--hover);color:var(--red);}
+
+    /* Spinner */
+    .spinner{width:14px;height:14px;border:2px solid var(--border);
+      border-top-color:var(--accent);border-radius:50%;
+      animation:spin 0.7s linear infinite;flex-shrink:0;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Error */
+    .error-bar{background:#fef2f2;border:1.5px solid rgba(220,38,38,0.3);
+      border-radius:8px;padding:9px 12px;color:var(--red);font-size:12px;display:none;}
+
+    /* Extract button */
+    .extract-btn{width:100%;padding:13px;background:var(--accent);border:none;
+      border-radius:9px;color:#fff;font-size:14px;font-weight:700;
+      cursor:pointer;transition:all 0.15s;
+      box-shadow:0 2px 6px rgba(37,99,235,0.35);}
+    .extract-btn:hover:not(:disabled){background:var(--accent-dim);}
+    .extract-btn:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+
+    /* Progress */
+    .progress-wrap{display:none;}
+    .progress-track{height:5px;background:var(--elevated);border-radius:3px;
+      overflow:hidden;border:1px solid var(--border);margin-bottom:6px;}
+    .progress-bar{height:100%;background:var(--accent);border-radius:3px;
+      width:0%;transition:width 0.4s ease;}
+    .progress-label{font-size:11px;color:var(--text-3);text-align:center;}
+
+    @media(max-width:720px){
+      .main{flex-direction:column;}
+      .right-col{width:100%;position:static;}
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-logo">S</div>
+    <span class="brand-name">SmartFill <em>AI</em></span>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusLabel">Checking…</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Left: drop zone + contact -->
+  <div class="upload-col">
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg"/>
+      <span class="drop-icon">📁</span>
+      <div class="drop-title">Select or Drop Files</div>
+      <div class="drop-sub">SmartFill AI will automatically detect each document type</div>
+      <div class="drop-formats">
+        <span class="fmt-badge">JPG</span>
+        <span class="fmt-badge">PNG</span>
+        <span class="fmt-badge">PDF</span>
+      </div>
+      <div class="drop-limit">Up to 10 files · Max 10 MB each</div>
+    </div>
+
+    <!-- Contact details -->
+    <div class="contact-section">
+      <div class="contact-title">Contact Details (optional)</div>
+      <div class="contact-row">
+        <div class="inp-group">
+          <label class="inp-label" for="inp-mobile">📱 Mobile Number</label>
+          <input class="inp" id="inp-mobile" type="tel" placeholder="10-digit number" maxlength="10" oninput="onText('mobile',this.value)"/>
+        </div>
+        <div class="inp-group">
+          <label class="inp-label" for="inp-email">✉️ Email Address</label>
+          <input class="inp" id="inp-email" type="email" placeholder="customer@example.com" oninput="onText('email',this.value)"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-bar" id="errorBar"></div>
+  </div>
+
+  <!-- Right: file list + extract -->
+  <div class="right-col">
+    <div class="files-card">
+      <div class="files-header">
+        <span>Documents</span>
+        <span class="files-count" id="filesCount">0 files</span>
+      </div>
+      <div id="fileListWrap">
+        <div class="files-empty">
+          <div class="files-empty-icon">🗂️</div>
+          <div>No files added yet</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="extract-btn" id="extractBtn" disabled>Extract Data →</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-label" id="progressLabel">Uploading…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+const API = "http://127.0.0.1:8000";
+
+// Map from document type → display info
+const TYPE_INFO = {
+  aadhaar:             {icon:"🪪", label:"Aadhaar Card"},
+  pan:                 {icon:"💳", label:"PAN Card"},
+  passport:            {icon:"📘", label:"Passport"},
+  driving_license:     {icon:"🚗", label:"Driving Licence"},
+  voter_id:            {icon:"🗳️", label:"Voter ID"},
+  certificate_ssc:     {icon:"📜", label:"SSC Certificate / Memo"},
+  certificate_inter:   {icon:"📋", label:"Intermediate Certificate / Memo"},
+  certificate_degree:  {icon:"🎓", label:"Degree Certificate"},
+  bank_passbook:       {icon:"🏦", label:"Bank Passbook"},
+  salary_slip:         {icon:"💰", label:"Salary Slip"},
+  generic:             {icon:"📄", label:"Document"},
+  auto:                {icon:"📄", label:"Document"},
+};
+
+// State
+const queue = [];   // [{id, file, status:'pending'|'detecting'|'done'|'failed', docType, label}]
+const textInputs = {};
+let nextId = 0;
+
+// ── Init ──────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", function() {
+  checkHealth();
+  setupDropZone();
+  document.getElementById("fileInput").addEventListener("change", onFilesSelected);
+  document.getElementById("extractBtn").addEventListener("click", extract);
+});
+
+async function checkHealth() {
+  try {
+    var r = await fetch(API + "/api/v1/health", {signal:AbortSignal.timeout(3000)});
+    var ok = r.ok;
+    document.getElementById("statusDot").className = "status-dot"+(ok?" online":"");
+    document.getElementById("statusLabel").textContent = ok ? "Backend online" : "Backend offline";
+  } catch(e) {
+    document.getElementById("statusLabel").textContent = "Backend offline";
+  }
+}
+
+function setupDropZone() {
+  var zone = document.getElementById("dropZone");
+  zone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    zone.classList.add("drag-over");
+  });
+  zone.addEventListener("dragleave", function(e) {
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove("drag-over");
+  });
+  zone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    addFiles(Array.from(e.dataTransfer.files));
+  });
+}
+
+function onFilesSelected(e) {
+  addFiles(Array.from(e.target.files));
+  e.target.value = ""; // reset so same file can be re-added
+}
+
+function onText(key, value) {
+  var v = value.trim();
+  if (v) textInputs[key] = v; else delete textInputs[key];
+  updateExtractBtn();
+}
+
+// ── File handling ─────────────────────────────────────────────────
+function addFiles(newFiles) {
+  hideError();
+  var toAdd = [];
+
+  for (var i = 0; i < newFiles.length; i++) {
+    var f = newFiles[i];
+    if (queue.length + toAdd.length >= 10) {
+      showError("Maximum 10 files allowed.");
+      break;
+    }
+    if (f.size > 10*1024*1024) {
+      showError(f.name + " is too large (max 10 MB) — skipped.");
+      continue;
+    }
+    toAdd.push({
+      id: nextId++,
+      file: f,
+      status: "detecting",
+      docType: "auto",
+      label: "Detecting…",
+      icon: "📄",
+    });
+  }
+
+  toAdd.forEach(function(item) { queue.push(item); });
+  renderList();
+  updateExtractBtn();
+
+  // Classify each new file
+  toAdd.forEach(function(item) { classifyFile(item); });
+}
+
+async function classifyFile(item) {
+  try {
+    // Use the classifier endpoint — sends just 200px thumbnail for speed
+    var form = new FormData();
+    form.append("files", item.file);
+    form.append("document_types", "auto");
+
+    var r = await fetch(API + "/api/v1/classify", {method:"POST", body:form, signal:AbortSignal.timeout(15000)});
+
+    if (r.ok) {
+      var data = await r.json();
+      var detected = data.results && data.results[0];
+      if (detected && detected.doc_type && detected.doc_type !== "auto") {
+        var info = TYPE_INFO[detected.doc_type] || TYPE_INFO.generic;
+        item.docType  = detected.doc_type;
+        item.label    = info.label;
+        item.icon     = info.icon;
+        item.status   = "done";
+      } else {
+        // Could not classify — still usable, will be extracted
+        item.docType  = "auto";
+        item.label    = guessFromFilename(item.file.name);
+        item.icon     = "📄";
+        item.status   = "done";
+      }
+    } else {
+      item.status = "done";
+      item.label  = guessFromFilename(item.file.name);
+    }
+  } catch(e) {
+    item.status = "done";
+    item.label  = guessFromFilename(item.file.name);
+  }
+  renderList();
+  updateExtractBtn();
+}
+
+function guessFromFilename(name) {
+  var n = name.toLowerCase();
+  if (n.includes("aadh") || n.includes("uid"))        return TYPE_INFO.aadhaar.label;
+  if (n.includes("pan"))                               return TYPE_INFO.pan.label;
+  if (n.includes("passport"))                          return TYPE_INFO.passport.label;
+  if (n.includes("dl") || n.includes("driving"))       return TYPE_INFO.driving_license.label;
+  if (n.includes("ssc") || n.includes("10th"))         return TYPE_INFO.certificate_ssc.label;
+  if (n.includes("inter") || n.includes("12th"))       return TYPE_INFO.certificate_inter.label;
+  if (n.includes("degree") || n.includes("btech"))     return TYPE_INFO.certificate_degree.label;
+  if (n.includes("bank") || n.includes("passbook"))    return TYPE_INFO.bank_passbook.label;
+  return "Document";
+}
+
+function removeFile(id) {
+  var idx = queue.findIndex(function(i){return i.id===id;});
+  if (idx >= 0) queue.splice(idx, 1);
+  renderList();
+  updateExtractBtn();
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function renderList() {
+  var wrap = document.getElementById("fileListWrap");
+  var count = queue.length;
+  document.getElementById("filesCount").textContent = count + " file" + (count!==1?"s":"");
+
+  if (!count) {
+    wrap.innerHTML = '<div class="files-empty"><div class="files-empty-icon">🗂️</div><div>No files added yet</div></div>';
+    return;
+  }
+
+  wrap.innerHTML = '<div class="file-list">' +
+    queue.map(function(item) {
+      var typeHtml;
+      if (item.status === "detecting") {
+        typeHtml = '<span class="file-type detecting">Detecting type…</span>';
+      } else if (item.status === "done") {
+        typeHtml = '<span class="file-type detected">✓ ' + esc(item.label) + '</span>';
+      } else {
+        typeHtml = '<span class="file-type failed">Could not detect</span>';
+      }
+
+      return '<div class="file-item' + (item.status==="detecting"?" detecting":"") + '">' +
+        (item.status==="detecting"
+          ? '<div class="spinner"></div>'
+          : '<span class="file-icon">' + item.icon + '</span>') +
+        '<div class="file-info">' +
+          '<div class="file-name" title="' + esc(item.file.name) + '">' + esc(truncate(item.file.name, 26)) + '</div>' +
+          typeHtml +
+        '</div>' +
+        '<button class="file-remove" onclick="removeFile(' + item.id + ')" title="Remove">✕</button>' +
+        '</div>';
+    }).join("") +
+    '</div>';
+}
+
+function updateExtractBtn() {
+  var hasFiles = queue.some(function(i){return i.status==="done";});
+  var hasAny   = hasFiles || textInputs.mobile || textInputs.email;
+  var detecting = queue.some(function(i){return i.status==="detecting";});
+  var btn = document.getElementById("extractBtn");
+  btn.disabled = !hasAny || detecting;
+  if (detecting) btn.textContent = "Detecting documents…";
+  else if (!hasAny) btn.textContent = "Select files to continue";
+  else {
+    var n = queue.filter(function(i){return i.status==="done";}).length;
+    var parts = [];
+    if (n > 0) parts.push(n + " doc" + (n!==1?"s":""));
+    if (textInputs.mobile) parts.push("mobile");
+    if (textInputs.email) parts.push("email");
+    btn.textContent = "Extract Data (" + parts.join(" + ") + ") →";
+  }
+}
+
+// ── Extract ───────────────────────────────────────────────────────
+async function extract() {
+  var btn = document.getElementById("extractBtn");
+  btn.disabled = true;
+  btn.textContent = "Processing…";
+  showProgress("Uploading…", 20);
+  hideError();
+
+  var form = new FormData();
+  var types = [];
+
+  queue.forEach(function(item) {
+    if (item.status === "done") {
+      form.append("files", item.file);
+      types.push(item.docType);
+    }
+  });
+  form.append("document_types", types.join(","));
+  if (textInputs.mobile) form.append("manual_mobile", textInputs.mobile);
+  if (textInputs.email)  form.append("manual_email",  textInputs.email);
+
+  var timer = setInterval(anim, 800);
+  try {
+    showProgress("Running AI extraction…", 45);
+    var res = await fetch(API + "/api/v1/process-session", {method:"POST", body:form});
+    clearInterval(timer);
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Server error " + res.status);
+
+    if (textInputs.mobile) data.profile.mobile = {value:textInputs.mobile,confidence:100,needs_review:false,source_doc:"manual",candidates:[],match_count:1};
+    if (textInputs.email)  data.profile.email  = {value:textInputs.email, confidence:100,needs_review:false,source_doc:"manual",candidates:[],match_count:1};
+
+    showProgress("Done ✓", 100);
+    await new Promise(function(r){setTimeout(r,400);});
+    sessionStorage.setItem("smartfill_profile", JSON.stringify(data));
+    window.location.href = "/review";
+  } catch(err) {
+    clearInterval(timer);
+    hideProgress();
+    btn.disabled = false;
+    updateExtractBtn();
+    showError(err.message || "Extraction failed. Please try again.");
+  }
+}
+
+var _pv = 0;
+function showProgress(l,v){document.getElementById("progressWrap").style.display="block";document.getElementById("progressLabel").textContent=l;if(v!==undefined){_pv=v;document.getElementById("progressBar").style.width=v+"%";}}
+function anim(){if(_pv<88){_pv+=Math.random()*5;document.getElementById("progressBar").style.width=_pv+"%";}}
+function hideProgress(){document.getElementById("progressWrap").style.display="none";}
+function showError(m){var e=document.getElementById("errorBar");e.textContent="⚠ "+m;e.style.display="block";}
+function hideError(){document.getElementById("errorBar").style.display="none";}
+function truncate(s,n){return s.length>n?s.slice(0,n-1)+"…":s;}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+</script>
+</body>
+</html>

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartFill AI — Document Extraction</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0c0f1a;
+      --surface:   #141828;
+      --elevated:  #1b2035;
+      --hover:     #212640;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #6366f1;
+      --accent-dim:#4f52c9;
+      --accent-glow:rgba(99,102,241,0.15);
+      --green:     #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --amber:     #f59e0b;
+      --amber-dim: rgba(245,158,11,0.12);
+      --red:       #ef4444;
+      --red-dim:   rgba(239,68,68,0.12);
+      --text:      #e8eaf0;
+      --text-2:    #8b92a8;
+      --text-3:    #4a5170;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+    }
+    body { min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 10px var(--accent);
+    }
+    .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.4px; }
+    .brand-name em { font-style: normal; color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px;
+      background: var(--elevated); font-size: 12px; color: var(--text-2);
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+    .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .new-session-btn {
+      padding: 7px 16px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--elevated);
+      color: var(--text-2); font-size: 13px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .new-session-btn:hover { background: var(--hover); color: var(--text); }
+
+    /* ── Main layout ──────────────────────────────────────────────────────── */
+    .main { display: grid; grid-template-columns: 420px 1fr; flex: 1; height: calc(100vh - 56px); overflow: hidden; }
+
+    /* ── Left panel: upload ───────────────────────────────────────────────── */
+    .upload-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .panel-title {
+      padding: 20px 20px 12px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+      color: var(--text-3); text-transform: uppercase;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      margin: 0 16px;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .drop-icon { font-size: 32px; margin-bottom: 10px; }
+    .drop-text { font-size: 14px; font-weight: 600; color: var(--text); }
+    .drop-sub { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+    .drop-formats { font-size: 11px; color: var(--text-3); margin-top: 8px; }
+    #fileInput { display: none; }
+
+    /* Document type selector */
+    .doc-type-row {
+      margin: 12px 16px 0;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-type-label { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+    .doc-type-select {
+      flex: 1; padding: 8px 10px;
+      background: var(--elevated); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px;
+      cursor: pointer; outline: none;
+    }
+    .doc-type-select:focus { border-color: var(--accent); }
+
+    /* Queue */
+    .queue-title { padding: 16px 20px 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; color: var(--text-3); text-transform: uppercase; }
+    .queue { display: flex; flex-direction: column; gap: 6px; padding: 0 16px; }
+    .queue-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      background: var(--elevated); border: 1px solid var(--border);
+      border-radius: 10px; position: relative; overflow: hidden;
+    }
+    .queue-item.processing { border-color: var(--accent); }
+    .queue-item.done       { border-color: var(--green); background: var(--green-dim); }
+    .queue-item.failed     { border-color: var(--red); background: var(--red-dim); }
+    .queue-item-icon { font-size: 20px; flex-shrink: 0; }
+    .queue-item-info { flex: 1; min-width: 0; }
+    .queue-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .queue-item-meta { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+    .queue-item-status { font-size: 11px; font-weight: 600; }
+    .queue-item-status.processing { color: var(--accent); }
+    .queue-item-status.done       { color: var(--green); }
+    .queue-item-status.failed     { color: var(--red); }
+    .queue-progress {
+      position: absolute; bottom: 0; left: 0; height: 2px;
+      background: var(--accent); width: 0%;
+      transition: width 0.4s ease;
+    }
+    .queue-remove {
+      background: none; border: none; color: var(--text-3);
+      cursor: pointer; font-size: 16px; padding: 4px;
+      border-radius: 4px; transition: color 0.15s;
+    }
+    .queue-remove:hover { color: var(--red); }
+
+    /* Process button */
+    .process-wrap { padding: 16px; margin-top: auto; }
+    .process-btn {
+      width: 100%; padding: 13px;
+      background: var(--accent); border: none; border-radius: 10px;
+      color: #fff; font-size: 14px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.2px;
+      transition: background 0.15s, transform 0.1s, opacity 0.15s;
+    }
+    .process-btn:hover:not(:disabled) { background: var(--accent-dim); }
+    .process-btn:active:not(:disabled) { transform: scale(0.98); }
+    .process-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .process-status { font-size: 12px; color: var(--text-2); text-align: center; margin-top: 8px; min-height: 18px; }
+
+    /* ── Right panel: profile ─────────────────────────────────────────────── */
+    .profile-panel { overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--text-3); text-align: center; gap: 12px;
+    }
+    .empty-icon { font-size: 48px; opacity: 0.4; }
+    .empty-text { font-size: 15px; font-weight: 600; }
+    .empty-sub { font-size: 13px; }
+
+    /* Profile header */
+    .profile-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+    }
+    .profile-name { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+    .profile-meta { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+    .profile-actions { display: flex; gap: 8px; }
+    .action-btn {
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      font-weight: 500; cursor: pointer; transition: all 0.15s;
+    }
+    .action-btn.primary {
+      background: var(--accent); border: none; color: #fff;
+    }
+    .action-btn.primary:hover { background: var(--accent-dim); }
+    .action-btn.secondary {
+      background: var(--elevated); border: 1px solid var(--border); color: var(--text-2);
+    }
+    .action-btn.secondary:hover { background: var(--hover); color: var(--text); }
+
+    /* Confidence bar */
+    .confidence-bar-wrap { background: var(--elevated); border-radius: 10px; padding: 12px 16px; }
+    .confidence-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .confidence-label { font-size: 12px; color: var(--text-2); }
+    .confidence-value { font-size: 13px; font-weight: 700; color: var(--green); }
+    .confidence-track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+    .confidence-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width 0.8s ease; }
+    .confidence-stats { display: flex; gap: 20px; margin-top: 10px; }
+    .conf-stat { display: flex; flex-direction: column; gap: 2px; }
+    .conf-stat-val { font-size: 16px; font-weight: 700; }
+    .conf-stat-lbl { font-size: 11px; color: var(--text-3); }
+
+    /* Field sections */
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .section-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--elevated);
+    }
+    .section-icon { font-size: 16px; }
+    .section-title { font-size: 13px; font-weight: 600; }
+    .section-count { font-size: 11px; color: var(--text-3); margin-left: auto; }
+
+    .field-row {
+      display: grid; grid-template-columns: 160px 1fr auto;
+      align-items: center; gap: 12px;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+    .field-row:last-child { border-bottom: none; }
+    .field-row:hover { background: var(--hover); }
+    .field-row.review { background: rgba(245,158,11,0.06); }
+    .field-row.verified { }
+    .field-label { font-size: 12px; color: var(--text-2); font-weight: 500; }
+    .field-value { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .field-value.masked { letter-spacing: 2px; }
+    .field-right { display: flex; align-items: center; gap: 6px; }
+    .field-source { font-size: 10px; color: var(--text-3); background: var(--elevated); padding: 2px 6px; border-radius: 4px; }
+    .field-verified { color: var(--green); font-size: 14px; }
+
+    /* Confidence badge */
+    .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .badge.high   { background: var(--green-dim); color: var(--green); }
+    .badge.medium { background: var(--amber-dim); color: var(--amber); }
+    .badge.low    { background: var(--red-dim);   color: var(--red);   }
+
+    /* Doc sources strip */
+    .sources-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+    .source-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 20px;
+      background: var(--elevated); border: 1px solid var(--border);
+      font-size: 12px; color: var(--text-2);
+    }
+    .source-chip.ok  { border-color: rgba(34,197,94,0.3); color: var(--green); }
+    .source-chip.bad { border-color: rgba(239,68,68,0.3); color: var(--red); }
+
+    /* Review banner */
+    .review-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px;
+      background: var(--amber-dim); border: 1px solid rgba(245,158,11,0.25);
+      color: var(--amber); font-size: 13px;
+    }
+
+    /* Error banner */
+    .error-banner {
+      padding: 12px 16px; border-radius: 10px;
+      background: var(--red-dim); border: 1px solid rgba(239,68,68,0.25);
+      color: #fca5a5; font-size: 13px;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .main { grid-template-columns: 1fr; }
+      .upload-panel { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <span class="brand-name">SmartFill <em>AI</em></span>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusLabel">Checking…</span>
+    </div>
+    <button class="new-session-btn" onclick="newSession()">New Session</button>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Left: upload panel -->
+  <div class="upload-panel">
+    <div class="panel-title">Documents</div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="drop-icon">📄</div>
+      <div class="drop-text">Drop documents here</div>
+      <div class="drop-sub">or click to browse</div>
+      <div class="drop-formats">PDF · PNG · JPG · JPEG · max 10 MB each</div>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" />
+
+    <!-- Document type override -->
+    <div class="doc-type-row">
+      <span class="doc-type-label">Type:</span>
+      <select class="doc-type-select" id="docTypeSelect">
+        <option value="auto">Auto Detect</option>
+      </select>
+    </div>
+
+    <!-- Queue -->
+    <div class="queue-title">Queue</div>
+    <div class="queue" id="queue"></div>
+
+    <!-- Process button -->
+    <div class="process-wrap">
+      <button class="process-btn" id="processBtn" disabled onclick="processSession()">
+        Extract Data
+      </button>
+      <div class="process-status" id="processStatus"></div>
+    </div>
+  </div>
+
+  <!-- Right: profile panel -->
+  <div class="profile-panel" id="profilePanel">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🗂️</div>
+      <div class="empty-text">No documents yet</div>
+      <div class="empty-sub">Upload Aadhaar, PAN, certificates or any government document.<br>SmartFill AI extracts and merges data across all documents.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+const API = "http://127.0.0.1:8000";
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  queue: [],       // {id, file, docType, status, result}
+  processing: false,
+  profile: null,
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  checkHealth();
+  loadDocumentTypes();
+  setupDragDrop();
+  document.getElementById("fileInput").addEventListener("change", handleFileInput);
+});
+
+// ── Health check ──────────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
+    const online = r.ok;
+    document.getElementById("statusDot").className = `status-dot ${online ? "online" : ""}`;
+    document.getElementById("statusLabel").textContent = online ? "Backend online" : "Backend offline";
+  } catch {
+    document.getElementById("statusLabel").textContent = "Backend offline";
+  }
+}
+
+// ── Load document types ───────────────────────────────────────────────────────
+async function loadDocumentTypes() {
+  try {
+    const r = await fetch(`${API}/api/v1/document-types`);
+    const data = await r.json();
+    const sel = document.getElementById("docTypeSelect");
+    data.types.forEach(({ value, label }) => {
+      const opt = document.createElement("option");
+      opt.value = value; opt.textContent = label;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+// ── File handling ─────────────────────────────────────────────────────────────
+function handleFileInput(e) {
+  Array.from(e.target.files).forEach(addToQueue);
+  e.target.value = "";
+}
+
+function addToQueue(file) {
+  if (file.size > 10 * 1024 * 1024) {
+    alert(`${file.name} is too large (max 10 MB)`);
+    return;
+  }
+  const id = Date.now() + Math.random();
+  const docType = document.getElementById("docTypeSelect").value;
+  state.queue.push({ id, file, docType, status: "pending" });
+  renderQueue();
+  updateProcessBtn();
+}
+
+function removeFromQueue(id) {
+  state.queue = state.queue.filter(i => i.id !== id);
+  renderQueue();
+  updateProcessBtn();
+}
+
+function renderQueue() {
+  const el = document.getElementById("queue");
+  if (!state.queue.length) {
+    el.innerHTML = '<div style="padding:12px 0;color:var(--text-3);font-size:12px;text-align:center">No documents added yet</div>';
+    return;
+  }
+  el.innerHTML = state.queue.map(item => {
+    const icon = docTypeIcon(item.docType);
+    const statusClass = item.status;
+    const statusText = { pending: "Ready", processing: "Processing…", done: "Done ✓", failed: "Failed" }[item.status] || "";
+    const name = truncate(item.file.name, 28);
+    const size = formatBytes(item.file.size);
+    return `
+      <div class="queue-item ${statusClass}" id="qi-${item.id}">
+        <span class="queue-item-icon">${icon}</span>
+        <div class="queue-item-info">
+          <div class="queue-item-name" title="${item.file.name}">${name}</div>
+          <div class="queue-item-meta">${item.docType === "auto" ? "Auto detect" : item.docType} · ${size}</div>
+        </div>
+        <span class="queue-item-status ${statusClass}">${statusText}</span>
+        ${item.status === "pending" ? `<button class="queue-remove" onclick="removeFromQueue(${item.id})" title="Remove">✕</button>` : ""}
+        ${item.status === "processing" ? '<div class="queue-progress" id="qp-' + item.id + '"></div>' : ""}
+      </div>`;
+  }).join("");
+}
+
+// ── Drag and drop ─────────────────────────────────────────────────────────────
+function setupDragDrop() {
+  const zone = document.getElementById("dropZone");
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    Array.from(e.dataTransfer.files).forEach(addToQueue);
+  });
+}
+
+// ── Processing ────────────────────────────────────────────────────────────────
+async function processSession() {
+  if (state.processing || !state.queue.length) return;
+  state.processing = true;
+  updateProcessBtn();
+
+  // Mark all as processing
+  state.queue.forEach(i => i.status = "processing");
+  renderQueue();
+  setStatus("Uploading documents…");
+
+  const formData = new FormData();
+  const types = [];
+  state.queue.forEach(item => {
+    formData.append("files", item.file);
+    types.push(item.docType);
+  });
+  formData.append("document_types", types.join(","));
+
+  try {
+    setStatus("Running OCR + AI extraction…");
+
+    // Animate progress bars
+    const timer = setInterval(() => {
+      state.queue.forEach(item => {
+        const el = document.getElementById(`qp-${item.id}`);
+        if (el) {
+          const current = parseFloat(el.style.width) || 10;
+          if (current < 85) el.style.width = `${current + Math.random() * 8}%`;
+        }
+      });
+    }, 600);
+
+    const response = await fetch(`${API}/api/v1/process-session`, {
+      method: "POST", body: formData,
+    });
+
+    clearInterval(timer);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || `Server error ${response.status}`);
+    }
+
+    // Mark all done
+    state.queue.forEach(i => i.status = "done");
+    renderQueue();
+
+    state.profile = data.profile;
+    setStatus(`✓ Extracted in ${(data.processing_time_ms / 1000).toFixed(1)}s`);
+    renderProfile(data);
+
+  } catch (err) {
+    state.queue.forEach(i => i.status = "failed");
+    renderQueue();
+    setStatus("");
+    showProfileError(err.message);
+  } finally {
+    state.processing = false;
+    updateProcessBtn();
+  }
+}
+
+// ── Profile rendering ─────────────────────────────────────────────────────────
+const FIELD_SECTIONS = [
+  {
+    title: "Personal Details", icon: "👤",
+    fields: [
+      { key: "name",         label: "Full Name" },
+      { key: "father_name",  label: "Father / Guardian" },
+      { key: "mother_name",  label: "Mother Name" },
+      { key: "gender",       label: "Gender" },
+      { key: "dob",          label: "Date of Birth" },
+      { key: "nationality",  label: "Nationality" },
+    ]
+  },
+  {
+    title: "Government IDs", icon: "🪪",
+    fields: [
+      { key: "aadhaar_number",  label: "Aadhaar No.", mask: true },
+      { key: "pan_number",      label: "PAN No." },
+      { key: "passport_number", label: "Passport No." },
+      { key: "voter_id",        label: "Voter ID" },
+      { key: "dl_number",       label: "Driving Licence" },
+    ]
+  },
+  {
+    title: "Contact", icon: "📍",
+    fields: [
+      { key: "mobile",  label: "Mobile" },
+      { key: "address", label: "Address" },
+    ]
+  },
+  {
+    title: "Education", icon: "🎓",
+    fields: [
+      { key: "degree",          label: "Degree" },
+      { key: "specialization",  label: "Specialization" },
+      { key: "university",      label: "University" },
+      { key: "college",         label: "College" },
+      { key: "year_of_passing", label: "Year of Passing" },
+      { key: "percentage",      label: "Percentage / CGPA" },
+    ]
+  },
+  {
+    title: "Banking", icon: "🏦",
+    fields: [
+      { key: "account_number", label: "Account Number", mask: true },
+      { key: "ifsc",           label: "IFSC Code" },
+      { key: "bank_name",      label: "Bank Name" },
+    ]
+  },
+];
+
+function renderProfile(data) {
+  const profile = data.profile;
+  const panel = document.getElementById("profilePanel");
+  const populated = Object.entries(profile)
+    .filter(([k, v]) => v && typeof v === "object" && v.value)
+    .map(([k]) => k);
+
+  if (!populated.length) {
+    showProfileError("No fields could be extracted. Please try higher quality images.");
+    return;
+  }
+
+  const nameField = profile.name?.value || "Customer";
+  const overallConf = profile.overall_confidence || 0;
+  const verified = profile.verified_fields || 0;
+  const total = profile.total_fields_extracted || 0;
+  const reviewCount = (profile.fields_needing_review || []).length;
+  const docs = data.documents || [];
+
+  let html = `
+    <!-- Header -->
+    <div class="profile-header">
+      <div>
+        <div class="profile-name">${esc(nameField)}</div>
+        <div class="profile-meta">${total} fields extracted · ${docs.length} document${docs.length !== 1 ? "s" : ""}</div>
+      </div>
+      <div class="profile-actions">
+        <button class="action-btn secondary" onclick="copyProfile()">Copy All</button>
+        <button class="action-btn primary" onclick="exportProfile()">Export JSON</button>
+      </div>
+    </div>
+
+    <!-- Confidence bar -->
+    <div class="confidence-bar-wrap">
+      <div class="confidence-row">
+        <span class="confidence-label">Overall Confidence</span>
+        <span class="confidence-value">${overallConf.toFixed(1)}%</span>
+      </div>
+      <div class="confidence-track">
+        <div class="confidence-fill" style="width:${overallConf}%"></div>
+      </div>
+      <div class="confidence-stats">
+        <div class="conf-stat">
+          <span class="conf-stat-val" style="color:var(--text)">${total}</span>
+          <span class="conf-stat-lbl">Fields Extracted</span>
+        </div>
+        <div class="conf-stat">
+          <span class="conf-stat-val" style="color:var(--green)">${verified}</span>
+          <span class="conf-stat-lbl">Verified (2+ docs)</span>
+        </div>
+        <div class="conf-stat">
+          <span class="conf-stat-val" style="color:${reviewCount ? 'var(--amber)' : 'var(--green)'}">${reviewCount}</span>
+          <span class="conf-stat-lbl">Need Review</span>
+        </div>
+      </div>
+    </div>`;
+
+  // Documents strip
+  if (docs.length) {
+    html += `<div class="sources-strip">` +
+      docs.map(d => `
+        <div class="source-chip ${d.status === 'success' ? 'ok' : d.status === 'failed' ? 'bad' : ''}">
+          ${docTypeIcon(d.type)} ${d.type} · ${d.confidence?.toFixed(0) || "?"}%
+        </div>`).join("") +
+      `</div>`;
+  }
+
+  // Review banner
+  if (reviewCount) {
+    html += `<div class="review-banner">⚠️ ${reviewCount} field${reviewCount !== 1 ? "s" : ""} need operator review before submitting the application.</div>`;
+  }
+
+  // Field sections
+  FIELD_SECTIONS.forEach(section => {
+    const sectionFields = section.fields.filter(f => profile[f.key]?.value);
+    if (!sectionFields.length) return;
+
+    html += `
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">${section.icon}</span>
+          <span class="section-title">${section.title}</span>
+          <span class="section-count">${sectionFields.length} field${sectionFields.length !== 1 ? "s" : ""}</span>
+        </div>`;
+
+    sectionFields.forEach(({ key, label, mask }) => {
+      const field = profile[key];
+      if (!field?.value) return;
+
+      const conf = field.confidence || 0;
+      const badgeClass = conf >= 80 ? "high" : conf >= 60 ? "medium" : "low";
+      const isVerified = field.match_count >= 2;
+      const needsReview = field.needs_review;
+
+      let displayValue = esc(field.value);
+      let valueClass = "";
+      if (mask && key === "aadhaar_number" && field.value.length >= 4) {
+        displayValue = "•••• •••• " + field.value.slice(-4);
+        valueClass = "masked";
+      }
+
+      html += `
+        <div class="field-row ${needsReview ? "review" : ""}">
+          <span class="field-label">${label}</span>
+          <span class="field-value ${valueClass}">${displayValue}</span>
+          <div class="field-right">
+            ${isVerified ? '<span class="field-verified" title="Confirmed by 2+ documents">✓✓</span>' : ""}
+            <span class="badge ${badgeClass}">${conf.toFixed(0)}%</span>
+            <span class="field-source">${field.source_doc || ""}</span>
+          </div>
+        </div>`;
+    });
+
+    html += `</div>`;
+  });
+
+  panel.innerHTML = html;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+function copyProfile() {
+  if (!state.profile) return;
+  const lines = [];
+  FIELD_SECTIONS.forEach(section => {
+    section.fields.forEach(({ key, label }) => {
+      const val = state.profile[key]?.value;
+      if (val) lines.push(`${label}: ${val}`);
+    });
+  });
+  navigator.clipboard.writeText(lines.join("\n")).then(() => {
+    alert("Profile copied to clipboard!");
+  });
+}
+
+function exportProfile() {
+  if (!state.profile) return;
+  const flat = {};
+  FIELD_SECTIONS.forEach(s => s.fields.forEach(({ key, label }) => {
+    const val = state.profile[key]?.value;
+    if (val) flat[key] = val;
+  }));
+  const blob = new Blob([JSON.stringify(flat, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "customer_profile.json";
+  a.click();
+}
+
+function newSession() {
+  state.queue = [];
+  state.processing = false;
+  state.profile = null;
+  renderQueue();
+  updateProcessBtn();
+  setStatus("");
+  document.getElementById("profilePanel").innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🗂️</div>
+      <div class="empty-text">No documents yet</div>
+      <div class="empty-sub">Upload Aadhaar, PAN, certificates or any government document.<br>SmartFill AI extracts and merges data across all documents.</div>
+    </div>`;
+  checkHealth();
+}
+
+function showProfileError(msg) {
+  document.getElementById("profilePanel").innerHTML =
+    `<div class="error-banner">❌ ${esc(msg)}</div>`;
+}
+
+function updateProcessBtn() {
+  const pending = state.queue.filter(i => i.status === "pending").length;
+  document.getElementById("processBtn").disabled = !pending || state.processing;
+  document.getElementById("processBtn").textContent =
+    state.processing ? "Processing…" : `Extract Data (${pending} doc${pending !== 1 ? "s" : ""})`;
+}
+
+function setStatus(msg) {
+  document.getElementById("processStatus").textContent = msg;
+}
+
+function docTypeIcon(type) {
+  const icons = {
+    aadhaar: "🪪", pan: "💳", passport: "📘", driving_license: "🚗",
+    voter_id: "🗳️", certificate_ssc: "📜", certificate_degree: "🎓",
+    bank_passbook: "🏦", salary_slip: "💰", resume: "📄",
+    auto: "📄", generic: "📄",
+  };
+  return icons[type] || "📄";
+}
+
+function confidenceBadge(conf) {
+  const cls = conf >= 80 ? "high" : conf >= 60 ? "medium" : "low";
+  return `<span class="badge ${cls}">${conf.toFixed(0)}%</span>`;
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n - 1) + "…" : str;
+}
+
+function formatBytes(b) {
+  return b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function esc(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+</script>
+
+</body>
+</html>

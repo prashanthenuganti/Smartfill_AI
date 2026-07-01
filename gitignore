@@ -1,0 +1,32 @@
+# --- Secrets ---
+.env
+.env.local
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# --- Node / Chrome extension build artifacts (if any) ---
+node_modules/
+dist/
+*.log
+
+# --- OS / Editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Local data / uploads (don't commit real customer documents!) ---
+uploads/
+*.session.json
+sample_data/
+test_documents/
