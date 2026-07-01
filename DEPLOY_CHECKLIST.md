@@ -74,7 +74,7 @@ In `chrome-extension/popup.js` (and anywhere else a base URL is hardcoded,
 e.g. `content.js` or `background.js`), replace:
 
 ```js
-const BACKEND_URL = "http://127.0.0.1:8000";
+const BACKEND_URL = "https://web-production-a52e0.up.railway.app";
 ```
 
 with:
