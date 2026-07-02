@@ -291,7 +291,12 @@
 
 <script>
 "use strict";
-const API = "https://web-production-a52e0.up.railway.app";
+// Same-origin — this page is always served by the backend that should
+// receive its own API calls, whether that's the local dev server or the
+// deployed instance. A hardcoded remote domain here breaks local testing
+// with a cross-origin CORS failure the moment the page is served from
+// anywhere else.
+const API = "";
 
 // Map from document type → display info
 const TYPE_INFO = {

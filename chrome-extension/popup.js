@@ -1,7 +1,7 @@
 /**
  * popup.js — Milestone 3 (fixed)
  *
- * Profile source: GET https://web-production-a52e0.up.railway.app/api/v1/get-session
+ * Profile source: GET {API}/api/v1/get-session
  * No chrome.storage complexity — backend holds the session.
  *
  * Flow:
