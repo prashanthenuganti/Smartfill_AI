@@ -69,6 +69,50 @@
     .inp:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
     .inp::placeholder{color:var(--text-3);}
 
+    /* ── Exam / application selector ─────────────────────────────────── */
+    .exam-card{background:var(--surface);border:1.5px solid var(--border);
+      border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+    .exam-label{display:block;font-size:11px;font-weight:700;letter-spacing:0.6px;
+      text-transform:uppercase;color:var(--text-3);margin-bottom:8px;}
+    .exam-select{width:100%;padding:9px 11px;border:1.5px solid var(--border);
+      border-radius:7px;font-size:13px;color:var(--text);background:var(--bg);
+      outline:none;cursor:pointer;transition:border-color 0.15s,box-shadow 0.15s;}
+    .exam-select:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+    .exam-hint-global{font-size:11px;color:var(--text-3);margin-top:7px;}
+
+    /* ── Applicant assets (photo / signature) ───────────────────────── */
+    .assets-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .asset-card{background:var(--surface);border:1.5px solid var(--border);
+      border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);}
+    .asset-card-head{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+    .asset-icon{font-size:15px;}
+    .asset-title{font-size:12px;font-weight:700;color:var(--text-2);flex:1;}
+    .asset-optional{font-size:10px;color:var(--text-3);font-weight:600;
+      background:var(--elevated);padding:2px 7px;border-radius:20px;}
+    .asset-hint{font-size:10px;color:var(--accent);font-weight:600;margin-bottom:8px;}
+    .asset-upload-btn{display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:4px;padding:20px 10px;border:2px dashed var(--border);
+      border-radius:8px;cursor:pointer;font-size:12px;color:var(--text-2);
+      font-weight:600;transition:all 0.15s;position:relative;text-align:center;}
+    .asset-upload-btn:hover{border-color:var(--accent);background:var(--accent-light);}
+    .asset-upload-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+    .asset-preview{display:flex;flex-direction:column;align-items:center;gap:6px;}
+    .asset-preview img{max-width:100%;max-height:100px;border-radius:6px;
+      border:1px solid var(--border);object-fit:contain;background:var(--elevated);}
+    .asset-size{font-size:10px;font-weight:700;color:var(--green);
+      background:var(--green-light);border:1px solid var(--green-border);
+      padding:1px 8px;border-radius:20px;}
+    .asset-size.over{color:var(--amber);background:#fffbeb;border-color:#fde68a;}
+    .asset-actions{display:flex;gap:6px;}
+    .asset-download,.asset-remove{background:none;border:none;font-size:11px;
+      font-weight:600;cursor:pointer;padding:3px 8px;border-radius:5px;
+      text-decoration:none;}
+    .asset-download{color:var(--accent);}
+    .asset-download:hover{background:var(--accent-light);}
+    .asset-remove{color:var(--red);}
+    .asset-remove:hover{background:#fef2f2;}
+    .asset-loading{padding:20px 10px;text-align:center;font-size:12px;color:var(--text-3);}
+
     /* ── Right: file list + extract ───────────────────────────────── */
     .right-col{width:280px;flex-shrink:0;display:flex;flex-direction:column;
       gap:14px;position:sticky;top:72px;}
@@ -152,6 +196,20 @@
   <!-- Left: drop zone + contact -->
   <div class="upload-col">
 
+    <!-- Exam / application selector — drives photo & signature resizing -->
+    <div class="exam-card">
+      <label class="exam-label" for="examSelect">🎓 Examination / Application</label>
+      <select class="exam-select" id="examSelect">
+        <option value="none">— Generic (no fixed size) —</option>
+        <option value="upsc">UPSC Civil Services Examination</option>
+        <option value="ssc_cgl">SSC Combined Graduate Level Examination</option>
+        <option value="ibps_po">IBPS Probationary Officer Recruitment</option>
+        <option value="gate">Graduate Aptitude Test in Engineering (GATE)</option>
+        <option value="neet_ug">National Eligibility cum Entrance Test (UG)</option>
+      </select>
+      <div class="exam-hint-global" id="examHintGlobal">Photo &amp; signature will be auto-resized to this exam's requirements.</div>
+    </div>
+
     <!-- Drop zone -->
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg"/>
@@ -178,6 +236,28 @@
           <label class="inp-label" for="inp-email">✉️ Email Address</label>
           <input class="inp" id="inp-email" type="email" placeholder="customer@example.com" oninput="onText('email',this.value)"/>
         </div>
+      </div>
+    </div>
+
+    <!-- Applicant photo + signature (optional) -->
+    <div class="assets-row">
+      <div class="asset-card" id="photoCard">
+        <div class="asset-card-head">
+          <span class="asset-icon">🧑</span>
+          <span class="asset-title">Applicant Photo</span>
+          <span class="asset-optional">Optional</span>
+        </div>
+        <div class="asset-hint" id="photoHint"></div>
+        <div id="photoBody"></div>
+      </div>
+      <div class="asset-card" id="signatureCard">
+        <div class="asset-card-head">
+          <span class="asset-icon">✍️</span>
+          <span class="asset-title">Signature</span>
+          <span class="asset-optional">Optional</span>
+        </div>
+        <div class="asset-hint" id="signatureHint"></div>
+        <div id="signatureBody"></div>
       </div>
     </div>
 
@@ -232,7 +312,54 @@ const TYPE_INFO = {
 // State
 const queue = [];   // [{id, file, status:'pending'|'detecting'|'done'|'failed', docType, label}]
 const textInputs = {};
+const assets = { photo: null, signature: null };   // {sourceFile, dataUrl, sizeBytes, width, height, name}
+let selectedExam = "none";
 let nextId = 0;
+
+// ── Exam / application presets ──────────────────────────────────────
+// Dimensions are treated as exact target pixel sizes (center-cropped to
+// fit); KB range is what the portal actually validates against.
+const GENERIC_SPEC = { maxKB: 50 };
+const EXAM_PRESETS = {
+  none: { label: "Generic", photo: GENERIC_SPEC, signature: GENERIC_SPEC },
+  upsc: {
+    label: "UPSC Civil Services Examination",
+    photo:     { width: 350, height: 350, minKB: 20, maxKB: 300 },
+    signature: { width: 350, height: 150, minKB: 20, maxKB: 300 },
+  },
+  ssc_cgl: {
+    label: "SSC Combined Graduate Level Examination",
+    photo:     { width: 100, height: 120, minKB: 20, maxKB: 50 },
+    signature: { width: 40,  height: 60,  minKB: 10, maxKB: 20 },
+  },
+  ibps_po: {
+    label: "IBPS Probationary Officer Recruitment",
+    photo:     { width: 200, height: 230, minKB: 20, maxKB: 50 },
+    signature: { width: 140, height: 60,  minKB: 10, maxKB: 20 },
+  },
+  gate: {
+    label: "Graduate Aptitude Test in Engineering (GATE)",
+    photo:     { width: 480, height: 640, minKB: 5, maxKB: 1024 },
+    signature: { width: 160, height: 560, minKB: 5, maxKB: 300 },
+  },
+  neet_ug: {
+    label: "National Eligibility cum Entrance Test (UG)",
+    photo:     { width: 200, height: 230, minKB: 10, maxKB: 200 },
+    signature: { width: 200, height: 80,  minKB: 4,  maxKB: 30 },
+  },
+};
+
+function getSpec(kind) {
+  const preset = EXAM_PRESETS[selectedExam] || EXAM_PRESETS.none;
+  return preset[kind] || GENERIC_SPEC;
+}
+
+function specLabel(spec) {
+  if (spec.width && spec.height) {
+    return spec.width + '×' + spec.height + 'px · ' + spec.minKB + '–' + spec.maxKB + ' KB';
+  }
+  return 'Auto-resized · ≤' + spec.maxKB + ' KB';
+}
 
 // ── Init ──────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", function() {
@@ -240,7 +367,209 @@ document.addEventListener("DOMContentLoaded", function() {
   setupDropZone();
   document.getElementById("fileInput").addEventListener("change", onFilesSelected);
   document.getElementById("extractBtn").addEventListener("click", extract);
+  document.getElementById("examSelect").addEventListener("change", onExamChange);
+  renderAssetHints();
+  renderAssetCard("photo");
+  renderAssetCard("signature");
 });
+
+function onExamChange(e) {
+  selectedExam = e.target.value;
+  renderAssetHints();
+  // Re-compress any already-uploaded assets against the new requirements
+  ["photo", "signature"].forEach(function(kind) {
+    if (assets[kind] && assets[kind].sourceFile) processAsset(kind);
+  });
+}
+
+function renderAssetHints() {
+  document.getElementById("photoHint").textContent = specLabel(getSpec("photo"));
+  document.getElementById("signatureHint").textContent = specLabel(getSpec("signature"));
+}
+
+// ── Applicant photo / signature capture ────────────────────────────
+function renderAssetCard(kind) {
+  const body = document.getElementById(kind + "Body");
+  const a = assets[kind];
+  if (!a) {
+    body.innerHTML =
+      '<label class="asset-upload-btn">' +
+        '📤 Upload ' + (kind === "photo" ? "Photo" : "Signature") +
+        '<input type="file" accept="image/*" id="' + kind + 'Input"/>' +
+      '</label>';
+    document.getElementById(kind + "Input").addEventListener("change", function(e) { onAssetSelected(e, kind); });
+    return;
+  }
+  const spec = getSpec(kind);
+  const kb = (a.sizeBytes / 1024).toFixed(1);
+  const maxBytes = spec.maxKB * 1024;
+  const minBytes = (spec.minKB || 0) * 1024;
+  const outOfRange = a.sizeBytes > maxBytes || a.sizeBytes < minBytes;
+  body.innerHTML =
+    '<div class="asset-preview">' +
+      '<img src="' + a.dataUrl + '" alt="' + kind + '"/>' +
+      '<span class="asset-size' + (outOfRange ? " over" : "") + '">' + kb + ' KB · ' + a.width + '×' + a.height + (outOfRange ? "" : " ✓") + '</span>' +
+      '<div class="asset-actions">' +
+        '<a class="asset-download" href="' + a.dataUrl + '" download="' + a.name + '">⬇ Download</a>' +
+        '<button class="asset-remove" onclick="removeAsset(\'' + kind + '\')">✕ Remove</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function renderAssetLoading(kind) {
+  document.getElementById(kind + "Body").innerHTML =
+    '<div class="asset-loading">Compressing…</div>';
+}
+
+function onAssetSelected(e, kind) {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showError("Please choose an image file for " + kind + ".");
+    return;
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    showError((kind === "photo" ? "Photo" : "Signature") + " is too large to process (max 15 MB).");
+    return;
+  }
+  assets[kind] = { sourceFile: file };
+  processAsset(kind);
+}
+
+function processAsset(kind) {
+  const a = assets[kind];
+  if (!a || !a.sourceFile) return;
+  renderAssetLoading(kind);
+  const spec = getSpec(kind);
+  compressImage(a.sourceFile, spec).then(function(result) {
+    assets[kind] = {
+      sourceFile: a.sourceFile,
+      dataUrl: result.dataUrl,
+      sizeBytes: result.sizeBytes,
+      width: result.width,
+      height: result.height,
+      name: (kind === "photo" ? "photo" : "signature") + ".jpg",
+    };
+    renderAssetCard(kind);
+  }).catch(function() {
+    showError("Could not process that image. Try a different file.");
+    assets[kind] = null;
+    renderAssetCard(kind);
+  });
+}
+
+function removeAsset(kind) {
+  assets[kind] = null;
+  renderAssetCard(kind);
+}
+
+// Loads a File into an <img>, then re-encodes it as JPEG, stepping quality
+// down (and dimensions down once quality bottoms out) until the output is
+// under the spec's maxKB — government portals typically cap photo/signature
+// uploads at 20-50 KB, and some (UPSC, SSC, IBPS, GATE, NEET) require an
+// exact pixel size too.
+function loadImage(file) {
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function() {
+      const img = new Image();
+      img.onload = function() { resolve(img); };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlSizeBytes(dataUrl) {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return Math.round(base64.length * 3 / 4);
+}
+
+// Scales the source image to cover the target box, then center-crops to
+// the exact target dimensions (like CSS object-fit:cover) — preserves
+// aspect ratio instead of stretching/distorting the face or signature.
+function drawCover(ctx, img, targetW, targetH) {
+  const srcW = img.naturalWidth || img.width;
+  const srcH = img.naturalHeight || img.height;
+  const srcRatio = srcW / srcH;
+  const dstRatio = targetW / targetH;
+  let sx, sy, sw, sh;
+  if (srcRatio > dstRatio) {
+    sh = srcH;
+    sw = srcH * dstRatio;
+    sx = (srcW - sw) / 2;
+    sy = 0;
+  } else {
+    sw = srcW;
+    sh = srcW / dstRatio;
+    sx = 0;
+    sy = (srcH - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+}
+
+async function compressImage(file, spec) {
+  const img = await loadImage(file);
+  const maxBytes = spec.maxKB * 1024;
+  const fixedDims = !!(spec.width && spec.height);
+
+  let width, height;
+  if (fixedDims) {
+    width = spec.width;
+    height = spec.height;
+  } else {
+    const MAX_DIM = 1000;
+    width = img.naturalWidth || img.width;
+    height = img.naturalHeight || img.height;
+    if (Math.max(width, height) > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+  }
+
+  // Start at max quality — for small fixed exam dimensions (e.g. SSC's
+  // 40×60 signature) that's the only way to get close to the portal's
+  // minimum KB requirement; quality only comes down if we overshoot maxKB.
+  let quality = 1.0;
+  let dataUrl = "";
+  let sizeBytes = Infinity;
+
+  for (let attempt = 0; attempt < 14; attempt++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    // Flatten transparency (PNG signatures) onto white before JPEG encode
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    if (fixedDims) {
+      drawCover(ctx, img, width, height);
+    } else {
+      ctx.drawImage(img, 0, 0, width, height);
+    }
+
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+    sizeBytes = dataUrlSizeBytes(dataUrl);
+
+    if (sizeBytes <= maxBytes) break;
+
+    if (quality > 0.3) {
+      quality -= 0.08;
+    } else if (!fixedDims) {
+      // Generic mode has no fixed pixel requirement — shrink as a last resort
+      width = Math.round(width * 0.85);
+      height = Math.round(height * 0.85);
+    } else {
+      break; // exam presets keep their exact required pixel size — best effort
+    }
+  }
+
+  return { dataUrl, sizeBytes, width, height };
+}
 
 async function checkHealth() {
   try {
@@ -455,6 +784,8 @@ async function extract() {
 
     if (textInputs.mobile) data.profile.mobile = {value:textInputs.mobile,confidence:100,needs_review:false,source_doc:"manual",candidates:[],match_count:1};
     if (textInputs.email)  data.profile.email  = {value:textInputs.email, confidence:100,needs_review:false,source_doc:"manual",candidates:[],match_count:1};
+    if (assets.photo)      data.profile.applicant_photo     = assets.photo.dataUrl;
+    if (assets.signature)  data.profile.applicant_signature = assets.signature.dataUrl;
 
     showProgress("Done ✓", 100);
     await new Promise(function(r){setTimeout(r,400);});

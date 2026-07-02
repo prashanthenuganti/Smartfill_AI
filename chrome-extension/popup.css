@@ -46,6 +46,13 @@ body { width: 360px; min-height: 200px; max-height: 560px; overflow-y: auto; }
   border:1px solid var(--border); border-radius:12px; color:var(--text-2); }
 .field-pill.id { border-color:rgba(99,102,241,0.3); color:var(--accent); }
 
+.profile-assets { display:flex; gap:8px; margin-top:8px; }
+.asset-thumb-chip { display:flex; align-items:center; gap:6px; padding:4px 8px;
+  background:var(--elevated); border:1px solid var(--border); border-radius:8px; }
+.asset-thumb-chip img { width:22px; height:22px; border-radius:4px; object-fit:cover;
+  border:1px solid var(--border); }
+.asset-thumb-chip span { font-size:10px; color:var(--text-2); font-weight:600; }
+
 /* Page status */
 .page-status { display:flex; align-items:center; gap:8px;
   padding:10px 12px; background:var(--elevated); border-radius:8px;

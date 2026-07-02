@@ -336,12 +336,21 @@ async def map_fields(request: Request) -> JSONResponse:
     if not fields:
         return JSONResponse({"mapping": {}, "matched": 0})
 
-    # Build profile summary for the AI
+    # Build profile summary for the AI. applicant_photo/applicant_signature
+    # hold full base64 image data — never dump that into the prompt, just
+    # flag that they exist so the model can still map file-upload fields.
     profile_lines = [
         f"  {k}: {v}"
         for k, v in profile.items()
-        if v and k not in ("documents_processed", "fields_needing_review")
+        if v and k not in (
+            "documents_processed", "fields_needing_review",
+            "applicant_photo", "applicant_signature",
+        )
     ]
+    if profile.get("applicant_photo"):
+        profile_lines.append("  applicant_photo: <image attached>")
+    if profile.get("applicant_signature"):
+        profile_lines.append("  applicant_signature: <image attached>")
     profile_summary = "\n".join(profile_lines)
 
     # Build field list for the AI
@@ -373,6 +382,7 @@ Profile keys:
              marks_identification (generic — use this for a single combined
              "Identification Marks" field that isn't certificate-specific)
   BANKING:   account_number, ifsc, bank_name, branch
+  ASSETS:    applicant_photo (file upload), applicant_signature (file upload)
 
 Matching rules — common Indian govt portal field names:
   name         → "Applicant Name", "Full Name", "Name as per Aadhaar", "Name of Candidate"
@@ -387,8 +397,13 @@ Matching rules — common Indian govt portal field names:
   doe          → "Date of Expiry", "Valid Till", "Expiry Date", "Passport Expiry"
   doi          → "Date of Issue", "Issue Date"
   marks_identification → "Identification Marks", "Visible Identification Marks", "Distinguishing Marks"
+  applicant_photo (type=file) → "Upload Photo", "Applicant Photo", "Photograph", "Passport Size Photo"
+  applicant_signature (type=file) → "Upload Signature", "Applicant Signature", "Signature"
 
-NEVER map: captcha, OTP, password, confirm password, security code, search, upload fields.
+NEVER map: captcha, OTP, password, confirm password, security code, search, or any other
+file-upload field (e.g. "Upload Aadhaar Card", "Upload Marksheet") — the ONLY file-upload
+fields that should ever be mapped are the applicant's own photo and signature, and only
+when the profile actually has applicant_photo / applicant_signature attached.
 Return null for fields with no profile data.
 
 Return ONLY a JSON object like:
@@ -563,6 +578,20 @@ def _keyword_map_fields(fields: list, profile: dict) -> dict:
         ("bank_name",       ["bank name","name of bank"]),
     ]
 
+    # File-upload fields (photo/signature) — handled separately below since
+    # the generic SKIP set (which blocks "upload"/"photo"/"file") would
+    # otherwise hide them from every other file-upload field on the form.
+    ASSET_RULES = [
+        ("applicant_signature", [
+            "applicant signature","upload signature","candidate signature",
+            "upload your signature","signature",
+        ]),
+        ("applicant_photo", [
+            "applicant photo","upload photo","photograph","passport size photo",
+            "recent photograph","candidate photo","photo",
+        ]),
+    ]
+
     # Build combined text for each field
     def field_text(f):
         return " ".join([
@@ -573,6 +602,14 @@ def _keyword_map_fields(fields: list, profile: dict) -> dict:
     mapping = {}
     for field in fields:
         combined = field_text(field)
+
+        # File-upload fields: only ever map the applicant's own photo/signature.
+        if field.get("type") == "file":
+            for profile_key, keywords in ASSET_RULES:
+                if profile.get(profile_key) and any(kw in combined for kw in keywords):
+                    mapping[field["id"]] = profile_key
+                    break
+            continue
 
         # Skip captcha/otp/password
         if any(s in combined for s in SKIP):

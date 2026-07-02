@@ -165,6 +165,25 @@ function renderProfileCard() {
     const display = isId && val.length > 4 ? "•••• " + val.slice(-4) : val;
     return `<span class="field-pill ${isId ? "id" : ""}">${label}: ${esc(display)}</span>`;
   }).join("");
+
+  renderAssetThumbnails(p);
+}
+
+function renderAssetThumbnails(p) {
+  const wrap = document.getElementById("profileAssets");
+  const items = [];
+  if (p.applicant_photo)     items.push({ label: "Photo", src: p.applicant_photo });
+  if (p.applicant_signature) items.push({ label: "Signature", src: p.applicant_signature });
+
+  if (!items.length) {
+    wrap.classList.add("hidden");
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = items.map(i =>
+    `<div class="asset-thumb-chip"><img src="${i.src}" alt="${i.label}"/><span>${i.label}</span></div>`
+  ).join("");
 }
 
 // ── Scan + AI map ─────────────────────────────────────────────────────────────
@@ -309,6 +328,13 @@ function buildKeywordMapping(fields, profile) {
     ],
   };
 
+  // File-upload fields (photo/signature) — handled separately below since
+  // the generic SKIP list (which blocks "upload") would otherwise hide them.
+  const ASSET_KEYWORDS = {
+    applicant_signature: ["applicant signature","upload signature","candidate signature","upload your signature","signature"],
+    applicant_photo: ["applicant photo","upload photo","photograph","passport size photo","recent photograph","candidate photo","photo"],
+  };
+
   // Synthesize a generic 'marks_identification' value for forms with ONE
   // combined "Identification Marks" field (the common case) rather than
   // separate per-certificate fields. Prefers the most senior certificate's
@@ -325,6 +351,17 @@ function buildKeywordMapping(fields, profile) {
   const mapping = {};
   fields.forEach(f => {
     const combined = `${f.label} ${f.name||""} ${f.placeholder||""}`.toLowerCase();
+
+    // File inputs (photo/signature upload) — matched before the generic
+    // SKIP list so "upload photo" isn't discarded by the "upload" keyword.
+    if (f.type === "file") {
+      if (profile.applicant_signature && ASSET_KEYWORDS.applicant_signature.some(k => combined.includes(k))) {
+        mapping[f.id] = "applicant_signature";
+      } else if (profile.applicant_photo && ASSET_KEYWORDS.applicant_photo.some(k => combined.includes(k))) {
+        mapping[f.id] = "applicant_photo";
+      }
+      return;
+    }
 
     // Skip sensitive/non-fillable fields
     if (SKIP.some(s => combined.includes(s))) return;
@@ -361,10 +398,13 @@ function renderMapping(fields, mapping) {
     return;
   }
 
+  const ASSET_KEYS = new Set(["applicant_photo", "applicant_signature"]);
   list.innerHTML = matched.map(f => {
     const key = mapping[f.id];
     const val = state.profile[key] || "";
-    const displayVal = ID_FIELDS.has(key) && val.length > 4
+    const displayVal = ASSET_KEYS.has(key)
+      ? "🖼 Image attached"
+      : ID_FIELDS.has(key) && val.length > 4
       ? "•••• " + val.slice(-4) : val;
     return `
       <div class="mapping-row matched">

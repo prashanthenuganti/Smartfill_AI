@@ -198,6 +198,17 @@
     .doc-chip-tick{font-size:12px;color:var(--green);}
     .doc-chip.fail .doc-chip-tick{color:var(--amber);}
 
+    /* Applicant photo / signature preview chips */
+    .asset-chip{display:flex;align-items:center;gap:8px;padding:6px 9px;
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:7px;margin-bottom:4px;}
+    .asset-thumb{width:28px;height:28px;border-radius:5px;object-fit:cover;
+      border:1px solid var(--border);background:var(--bg);flex-shrink:0;}
+    .asset-label{font-size:12px;font-weight:600;color:var(--text);flex:1;}
+    .asset-x{background:none;border:none;color:var(--text-4);cursor:pointer;
+      font-size:12px;padding:2px 5px;border-radius:4px;}
+    .asset-x:hover{background:var(--red-bg);color:var(--red);}
+
     /* #12 bigger primary action */
     .sb-actions{margin-top:auto;display:flex;flex-direction:column;gap:6px;}
     .sb-btn{width:100%;padding:9px;border-radius:8px;font-size:13px;
@@ -247,6 +258,7 @@
       <div class="sb-title">Documents Used <span id="docsCount" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
       <div id="docsList"></div>
     </div>
+    <div id="assetsSection"></div>
     <div class="sb-actions">
       <button class="sb-btn sb-new" onclick="newSession()">↺ New Customer</button>
       <!-- #12 privacy -->
@@ -352,6 +364,7 @@ const DOC_NAMES={aadhaar:"Aadhaar",pan:"PAN",passport:"Passport",
 let profile=null,sessionData=null;
 const edits={};
 const collapsed={};
+const removedAssets={};
 
 function rawF(k){return profile?profile[k]:null;}
 function getVal(k){
@@ -372,6 +385,10 @@ function isWarn(k){
 function getFinal(){
   var r={};
   SECTIONS.forEach(function(s){s.fields.forEach(function(f){var v=getVal(f.key);if(v)r[f.key]=v;});});
+  ["applicant_photo","applicant_signature"].forEach(function(k){
+    if(removedAssets[k])return;
+    var v=getVal(k);if(v)r[k]=v;
+  });
   return r;
 }
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -483,7 +500,7 @@ document.addEventListener("DOMContentLoaded",function(){
     if(!raw){showEmpty();return;}
     sessionData=JSON.parse(raw);profile=sessionData.profile;
     if(!profile)throw new Error("No profile data");
-    render();renderDocs();updateHdr();
+    render();renderDocs();renderAssets();updateHdr();
   }catch(e){showErr(e.message);}
 });
 
@@ -672,6 +689,30 @@ function renderDocs(){
       '<span class="doc-chip-tick">✓</span>'+
       '</div>';
   }).join("");
+}
+
+function renderAssets(){
+  var wrap=document.getElementById("assetsSection");
+  if(!wrap)return;
+  var items=[];
+  if(profile.applicant_photo && !removedAssets.applicant_photo)
+    items.push({key:"applicant_photo",label:"Applicant Photo",src:profile.applicant_photo});
+  if(profile.applicant_signature && !removedAssets.applicant_signature)
+    items.push({key:"applicant_signature",label:"Signature",src:profile.applicant_signature});
+  if(!items.length){wrap.innerHTML="";return;}
+  wrap.innerHTML='<div class="sb-title">Applicant Assets</div>'+
+    items.map(function(i){
+      return '<div class="asset-chip">'+
+        '<img class="asset-thumb" src="'+i.src+'" alt="'+esc(i.label)+'"/>'+
+        '<span class="asset-label">'+esc(i.label)+'</span>'+
+        '<button class="asset-x" title="Remove" onclick="removeAsset(\''+i.key+'\')">✕</button>'+
+      '</div>';
+    }).join("");
+}
+
+function removeAsset(key){
+  removedAssets[key]=true;
+  renderAssets();
 }
 
 function guessTypeFromFilename(fn){

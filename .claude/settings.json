@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(pip show *)",
+      "Bash(pip list *)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Bash(python -c \"print\\('python ok'\\)\")",
+      "Bash(python -m pip install -r requirements.txt)",
+      "Bash(python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000)",
+      "Bash(disown)",
+      "Bash(cat /tmp_server_log.txt)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/v1/save-session -H 'Content-Type: application/json' -d '{\"profile\": {\"name\":\"Ravi Kumar\",\"mobile\":\"9876543210\",\"email\":\"applicant@example.com\",\"applicant_photo\":\"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAAAAAAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=\",\"applicant_signature\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\"}}')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s http://127.0.0.1:8000/api/v1/get-session)",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/v1/map-fields -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(curl -s http://127.0.0.1:8000/app)",
+      "Bash(curl -s http://127.0.0.1:8000/review)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu '--screenshot=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/upload_page.png' --window-size=1000,900 http://127.0.0.1:8000/app)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --virtual-time-budget=3000 '--screenshot=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/upload_page2.png' --window-size=1000,900 http://127.0.0.1:8000/app)",
+      "Bash(python -c \"import websockets\")",
+      "Bash(python -c \"import requests\")",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --remote-debugging-port=9333 '--user-data-dir=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/chrome-profile' http://127.0.0.1:8000/app)",
+      "Bash(curl -s http://127.0.0.1:9333/json/version)",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test.py')",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_sig.py')",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_shot.py')",
+      "Bash(taskkill //F //IM chrome.exe)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --remote-debugging-port=9333 '--user-data-dir=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/chrome-profile2' http://127.0.0.1:8000/app)",
+      "Bash(curl -s -m 5 http://127.0.0.1:8000/api/v1/health)",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_exam.py')",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_exam_dense.py')",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_switch.py')"
+    ]
+  }
+}

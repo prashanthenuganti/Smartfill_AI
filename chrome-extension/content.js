@@ -70,8 +70,8 @@ function scanFields() {
   const selector = [
     'input:not([type="hidden"]):not([type="submit"])',
     ':not([type="button"]):not([type="reset"])',
-    ':not([type="file"]):not([type="checkbox"])',
-    ':not([type="radio"]):not([type="image"])',
+    ':not([type="checkbox"]):not([type="radio"])',
+    ':not([type="image"])',
     ", textarea, select",
   ].join("");
 
@@ -254,9 +254,6 @@ async function fillForm(profile, options) {
     const rawValue = profile[profileKey];
     if (!rawValue) continue;
 
-    // Format value appropriately for form filling
-    const value = formatForFill(profileKey, rawValue);
-
     try {
       const el = document.querySelector(selector);
 
@@ -265,14 +262,21 @@ async function fillForm(profile, options) {
         continue;
       }
 
-      let ok;
-      if (el.tagName === "SELECT") {
-        ok = fillSelect(el, value);
-      } else if (el.hasAttribute("data-sf-dd")) {
-        // Custom click-based dropdown (e.g. SSC.gov.in's app-dropdown)
-        ok = await fillCustomDropdown(el, value);
+      let ok, value;
+      if (el.type === "file") {
+        // Applicant photo/signature — rawValue is a data: URL, not text.
+        ok = await fillFileInput(el, rawValue, profileKey);
+        value = "[image]";
       } else {
-        ok = fillInput(el, value);
+        value = formatForFill(profileKey, rawValue);
+        if (el.tagName === "SELECT") {
+          ok = fillSelect(el, value);
+        } else if (el.hasAttribute("data-sf-dd")) {
+          // Custom click-based dropdown (e.g. SSC.gov.in's app-dropdown)
+          ok = await fillCustomDropdown(el, value);
+        } else {
+          ok = fillInput(el, value);
+        }
       }
 
       if (ok) {
@@ -409,6 +413,30 @@ function simulateTyping(el, value) {
   }
   el.dispatchEvent(new Event("change", { bubbles: true }));
   el.dispatchEvent(new Event("blur",   { bubbles: true }));
+}
+
+// ── File input filler (applicant photo / signature) ──────────────────────────
+// Converts the stored data: URL back into a File and assigns it via
+// DataTransfer — the standard way to set input.files programmatically,
+// since input.value can't be set directly on file inputs for security reasons.
+async function fillFileInput(el, dataUrl, profileKey) {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const name = profileKey === "applicant_signature" ? "signature.jpg" : "photo.jpg";
+    const file = new File([blob], name, { type: blob.type || "image/jpeg" });
+
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    el.files = dt.files;
+
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return el.files.length > 0;
+  } catch (err) {
+    console.warn("[SmartFill] File fill error:", err.message);
+    return false;
+  }
 }
 
 // ── Select filler ─────────────────────────────────────────────────────────────
