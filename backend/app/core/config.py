@@ -75,6 +75,16 @@ class Settings(BaseSettings):
 
     # ── Google OAuth Login ───────────────────────────────────────────────────
     google_client_id: Optional[str] = Field(default=None)
+    # Set this explicitly on Railway (e.g. https://your-app.up.railway.app)
+    # to build the OAuth redirect URI directly, rather than inferring the
+    # scheme from the incoming request. Behind Railway's reverse proxy,
+    # relying on request.url_for() to correctly detect "https" depends on
+    # uvicorn correctly trusting and parsing Railway's forwarded-proto
+    # header — a chain with several possible failure points that are hard
+    # to verify from outside the container. Setting this removes that
+    # uncertainty entirely. Leave unset for local dev — the dynamic
+    # behavior works fine there since there's no proxy in front of it.
+    public_base_url: Optional[str] = Field(default=None)
     google_client_secret: Optional[str] = Field(default=None)
     session_secret_key: str = Field(default="dev-insecure-change-me-in-env")
 

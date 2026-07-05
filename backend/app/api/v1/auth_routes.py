@@ -26,7 +26,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.get("/login")
 async def login(request: Request):
     """Redirect to Google's OAuth consent screen."""
-    redirect_uri = request.url_for("auth_callback")
+    settings = get_settings()
+    if settings.public_base_url:
+        # Explicit, not inferred — see the comment on public_base_url in
+        # config.py for why this is preferred over request.url_for()
+        # behind Railway's reverse proxy.
+        redirect_uri = f"{settings.public_base_url.rstrip('/')}/auth/callback"
+    else:
+        redirect_uri = request.url_for("auth_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
