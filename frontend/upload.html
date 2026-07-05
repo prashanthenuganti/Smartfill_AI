@@ -27,15 +27,15 @@
       display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;}
     .brand-name{font-size:16px;font-weight:800;letter-spacing:-0.4px;}
     .brand-name em{font-style:normal;color:var(--accent);}
-    .status-pill{display:flex;align-items:center;gap:5px;padding:4px 11px;
-      border-radius:20px;background:var(--elevated);border:1px solid var(--border);
-      font-size:11px;color:var(--text-2);}
-    .status-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);}
-    .status-dot.online{background:var(--green);}
+    .status-pill{display:flex;align-items:center;gap:5px;padding:3px 9px;
+      border-radius:20px;background:#f4f6fa;border:1px solid #e4e7ef;
+      font-size:10px;color:#6b7280;margin-top:8px;width:fit-content;}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:#9ca3af;}
+    .status-dot.online{background:#22c55e;}
 
     /* ── Main layout ──────────────────────────────────────────────── */
     .main{flex:1;display:flex;align-items:flex-start;justify-content:center;
-      padding:32px 20px;gap:24px;max-width:900px;margin:0 auto;width:100%;}
+      padding:32px 50px;gap:24px;max-width:900px;margin:0 auto;width:100%;}
 
     /* ── Left: upload area ────────────────────────────────────────── */
     .upload-col{flex:1;display:flex;flex-direction:column;gap:14px;}
@@ -67,6 +67,9 @@
       font-size:13px;color:var(--text);outline:none;background:var(--bg);
       transition:border-color 0.15s,box-shadow 0.15s;}
     .inp:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+    .inp.invalid{border-color:#dc2626;background:#fef2f2;}
+    .inp.invalid:focus{box-shadow:0 0 0 3px rgba(220,38,38,0.1);}
+    .inp-error{font-size:11px;color:#dc2626;margin-top:3px;min-height:14px;}
     .inp::placeholder{color:var(--text-3);}
 
     /* ── Exam / application selector ─────────────────────────────────── */
@@ -180,16 +183,60 @@
 </head>
 <body>
 
-<header class="header">
-  <div class="brand">
-    <div class="brand-logo">S</div>
-    <span class="brand-name">SmartFill <em>AI</em></span>
+<style>
+.sf-sidebar {
+  position: fixed; left: 0; top: 0; width: 220px; height: 100vh;
+  background: #fff; border-right: 1px solid #e4e7ef;
+  display: flex; flex-direction: column; padding: 20px 0;
+  z-index: 1000; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.sf-sidebar .sf-brand { padding: 0 20px 16px; font-size: 17px; font-weight: 800; color: #111827; letter-spacing:-0.3px; border-bottom: 1px solid #f0f2f7; margin-bottom: 12px; }
+.sf-sidebar .sf-brand em { font-style: normal; color: #2563eb; }
+.sf-sidebar .sf-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.sf-sidebar .sf-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  color: #4b5563; text-decoration: none; font-size: 13.5px; font-weight: 500;
+}
+.sf-sidebar .sf-nav a:hover { background: #f4f6fa; color: #111827; }
+.sf-sidebar .sf-nav a.active { background: #eff4ff; color: #2563eb; font-weight: 700; }
+.sf-sidebar .sf-divider { height:1px; background:#f0f2f7; margin: 8px 12px; }
+.sf-sidebar .sf-user { padding: 12px 20px; border-top: 1px solid #f0f2f7; }
+.sf-sidebar .sf-user-name { font-size: 12.5px; font-weight: 600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-sidebar .sf-user-email { font-size: 11px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.sf-sidebar .sf-signout { display:inline-block; margin-top:8px; font-size:12px; color:#6b7280; text-decoration:none; }
+.sf-sidebar .sf-signout:hover { color:#dc2626; }
+.sf-page-wrap { margin-left: 220px; min-height: 100vh; }
+.sf-mobile-toggle { display:none; position:fixed; top:14px; left:14px; z-index:1001; background:#fff; border:1px solid #e4e7ef; border-radius:8px; width:38px; height:38px; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
+@media (max-width: 900px) {
+  .sf-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .sf-sidebar.open { transform: translateX(0); }
+  .sf-page-wrap { margin-left: 0; }
+  .sf-mobile-toggle { display:flex !important; }
+}
+</style>
+<button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
+<nav class="sf-sidebar" id="sfSidebar">
+  <div class="sf-brand">
+    SmartFill <em>AI</em>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusLabel">Checking…</span>
+    </div>
   </div>
-  <div class="status-pill">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusLabel">Checking…</span>
+  <div class="sf-nav">
+    <a href="/app" class="active">Home</a>
+    <a href="/review" class="">Review</a>
+    <div class="sf-divider" id="sfAdminDivider" style="display:none"></div>
+    <a href="/admin/dashboard" id="sfAdminDashLink" class="" style="display:none">Dashboard</a>
+    <a href="/admin/exams" id="sfAdminExamsLink" class="" style="display:none">Manage Exams</a>
   </div>
-</header>
+  <div class="sf-user">
+    <div class="sf-user-name" id="sfUserName">&nbsp;</div>
+    <div class="sf-user-email" id="sfUserEmail"></div>
+    <a href="/auth/logout" class="sf-signout">Sign out</a>
+  </div>
+</nav>
+<div class="sf-page-wrap">
 
 <div class="main">
 
@@ -198,14 +245,9 @@
 
     <!-- Exam / application selector — drives photo & signature resizing -->
     <div class="exam-card">
-      <label class="exam-label" for="examSelect">🎓 Examination / Application</label>
+      <label class="exam-label" for="examSelect">Examination / Application</label>
       <select class="exam-select" id="examSelect">
         <option value="none">— Generic (no fixed size) —</option>
-        <option value="upsc">UPSC Civil Services Examination</option>
-        <option value="ssc_cgl">SSC Combined Graduate Level Examination</option>
-        <option value="ibps_po">IBPS Probationary Officer Recruitment</option>
-        <option value="gate">Graduate Aptitude Test in Engineering (GATE)</option>
-        <option value="neet_ug">National Eligibility cum Entrance Test (UG)</option>
       </select>
       <div class="exam-hint-global" id="examHintGlobal">Photo &amp; signature will be auto-resized to this exam's requirements.</div>
     </div>
@@ -229,12 +271,14 @@
       <div class="contact-title">Contact Details (optional)</div>
       <div class="contact-row">
         <div class="inp-group">
-          <label class="inp-label" for="inp-mobile">📱 Mobile Number</label>
-          <input class="inp" id="inp-mobile" type="tel" placeholder="10-digit number" maxlength="10" oninput="onText('mobile',this.value)"/>
+          <label class="inp-label" for="inp-mobile">Mobile Number</label>
+          <input class="inp" id="inp-mobile" type="tel" placeholder="10-digit number" maxlength="10" oninput="onContactInput('mobile',this)"/>
+          <div class="inp-error" id="err-mobile"></div>
         </div>
         <div class="inp-group">
-          <label class="inp-label" for="inp-email">✉️ Email Address</label>
-          <input class="inp" id="inp-email" type="email" placeholder="customer@example.com" oninput="onText('email',this.value)"/>
+          <label class="inp-label" for="inp-email">Email Address</label>
+          <input class="inp" id="inp-email" type="email" placeholder="customer@example.com" oninput="onContactInput('email',this)" onblur="onEmailBlur(this)"/>
+          <div class="inp-error" id="err-email"></div>
         </div>
       </div>
     </div>
@@ -243,7 +287,6 @@
     <div class="assets-row">
       <div class="asset-card" id="photoCard">
         <div class="asset-card-head">
-          <span class="asset-icon">🧑</span>
           <span class="asset-title">Applicant Photo</span>
           <span class="asset-optional">Optional</span>
         </div>
@@ -252,7 +295,6 @@
       </div>
       <div class="asset-card" id="signatureCard">
         <div class="asset-card-head">
-          <span class="asset-icon">✍️</span>
           <span class="asset-title">Signature</span>
           <span class="asset-optional">Optional</span>
         </div>
@@ -321,42 +363,54 @@ const assets = { photo: null, signature: null };   // {sourceFile, dataUrl, size
 let selectedExam = "none";
 let nextId = 0;
 
-// ── Exam / application presets ──────────────────────────────────────
-// Dimensions are treated as exact target pixel sizes (center-cropped to
-// fit); KB range is what the portal actually validates against.
+// ── Exam / application list + photo/signature specs ──────────────────
+// Previously hardcoded here as EXAM_PRESETS; now fetched from the admin-
+// configurable database via /api/v1/exams and /api/v1/exams/{code}/photo-specs,
+// so new exams can be added from the admin UI without redeploying this page.
 const GENERIC_SPEC = { maxKB: 50 };
-const EXAM_PRESETS = {
-  none: { label: "Generic", photo: GENERIC_SPEC, signature: GENERIC_SPEC },
-  upsc: {
-    label: "UPSC Civil Services Examination",
-    photo:     { width: 350, height: 350, minKB: 20, maxKB: 300 },
-    signature: { width: 350, height: 150, minKB: 20, maxKB: 300 },
-  },
-  ssc_cgl: {
-    label: "SSC Combined Graduate Level Examination",
-    photo:     { width: 100, height: 120, minKB: 20, maxKB: 50 },
-    signature: { width: 40,  height: 60,  minKB: 10, maxKB: 20 },
-  },
-  ibps_po: {
-    label: "IBPS Probationary Officer Recruitment",
-    photo:     { width: 200, height: 230, minKB: 20, maxKB: 50 },
-    signature: { width: 140, height: 60,  minKB: 10, maxKB: 20 },
-  },
-  gate: {
-    label: "Graduate Aptitude Test in Engineering (GATE)",
-    photo:     { width: 480, height: 640, minKB: 5, maxKB: 1024 },
-    signature: { width: 160, height: 560, minKB: 5, maxKB: 300 },
-  },
-  neet_ug: {
-    label: "National Eligibility cum Entrance Test (UG)",
-    photo:     { width: 200, height: 230, minKB: 10, maxKB: 200 },
-    signature: { width: 200, height: 80,  minKB: 4,  maxKB: 30 },
-  },
-};
+const examSpecCache = {};  // code -> { photo: {...}, signature: {...} }
+
+async function loadExamList() {
+  try {
+    const res = await fetch(API + "/api/v1/exams");
+    if (!res.ok) return;
+    const exams = await res.json();
+    const sel = document.getElementById("examSelect");
+    exams.forEach(function(e) {
+      const opt = document.createElement("option");
+      opt.value = e.code;
+      opt.textContent = e.display_name;
+      sel.appendChild(opt);
+    });
+  } catch (err) {
+    console.warn("[SmartFill] Could not load exam list:", err.message);
+  }
+}
+
+async function loadExamSpecs(code) {
+  if (code === "none" || examSpecCache[code]) return;
+  try {
+    const res = await fetch(API + "/api/v1/exams/" + encodeURIComponent(code) + "/photo-specs");
+    if (!res.ok) return;
+    const specs = await res.json();
+    const entry = {};
+    specs.forEach(function(s) {
+      entry[s.asset_type] = {
+        width: s.width_px, height: s.height_px,
+        minKB: s.min_kb || 0, maxKB: s.max_kb,
+      };
+    });
+    examSpecCache[code] = entry;
+    renderAssetHints();
+  } catch (err) {
+    console.warn("[SmartFill] Could not load specs for", code, err.message);
+  }
+}
 
 function getSpec(kind) {
-  const preset = EXAM_PRESETS[selectedExam] || EXAM_PRESETS.none;
-  return preset[kind] || GENERIC_SPEC;
+  const entry = examSpecCache[selectedExam];
+  if (entry && entry[kind]) return entry[kind];
+  return GENERIC_SPEC;
 }
 
 function specLabel(spec) {
@@ -373,6 +427,7 @@ document.addEventListener("DOMContentLoaded", function() {
   document.getElementById("fileInput").addEventListener("change", onFilesSelected);
   document.getElementById("extractBtn").addEventListener("click", extract);
   document.getElementById("examSelect").addEventListener("change", onExamChange);
+  loadExamList();
   renderAssetHints();
   renderAssetCard("photo");
   renderAssetCard("signature");
@@ -381,9 +436,11 @@ document.addEventListener("DOMContentLoaded", function() {
 function onExamChange(e) {
   selectedExam = e.target.value;
   renderAssetHints();
-  // Re-compress any already-uploaded assets against the new requirements
-  ["photo", "signature"].forEach(function(kind) {
-    if (assets[kind] && assets[kind].sourceFile) processAsset(kind);
+  loadExamSpecs(selectedExam).then(function() {
+    // Re-compress any already-uploaded assets against the new requirements
+    ["photo", "signature"].forEach(function(kind) {
+      if (assets[kind] && assets[kind].sourceFile) processAsset(kind);
+    });
   });
 }
 
@@ -614,6 +671,69 @@ function onText(key, value) {
   updateExtractBtn();
 }
 
+// Mirrors backend/app/core/validators.py exactly — mobile: 10 digits
+// starting 6-9; email: basic sanity check. Kept in sync deliberately so
+// client and server never disagree about what's valid. This is
+// immediate feedback only — the server re-validates independently and
+// is the actual enforcement (client-side checks can always be bypassed).
+const contactValid = {mobile: true, email: true};
+
+function checkContact(key, v) {
+  if (!v) return {isValid: true, message: ""};
+  if (key === "mobile") {
+    return /^[6-9]\d{9}$/.test(v)
+      ? {isValid: true, message: ""}
+      : {isValid: false, message: "Must be 10 digits, starting with 6-9."};
+  }
+  if (key === "email") {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+      ? {isValid: true, message: ""}
+      : {isValid: false, message: "Doesn't look like a valid email."};
+  }
+  return {isValid: true, message: ""};
+}
+
+function applyContactState(key, el, show) {
+  var v = el.value.trim();
+  var result = checkContact(key, v);
+  var displayInvalid = show && !result.isValid;
+
+  // contactValid tracks the SURFACED state, not the raw regex result of
+  // a possibly-still-being-typed value — so the Extract button doesn't
+  // disable itself over a field that's simply incomplete so far.
+  contactValid[key] = !displayInvalid;
+
+  var errEl = document.getElementById("err-" + key);
+  el.classList.toggle("invalid", displayInvalid);
+  errEl.textContent = displayInvalid ? result.message : "";
+}
+
+function onContactInput(key, el) {
+  var v = el.value.trim();
+  // Only show a red/error state once the operator has typed the FULL
+  // expected length for mobile (10 digits) — never on blur/leaving the
+  // field early, since both fields are optional and someone clicking
+  // away mid-entry (e.g. to go upload a document first) isn't
+  // necessarily "done" or wrong, just not finished yet. Email has no
+  // fixed length to key off of, so it never shows an inline error at
+  // all client-side — an invalid email is still caught, just at the
+  // server when Extract is actually clicked (see routes.py), which is
+  // the real enforcement point regardless.
+  var readyToShow = key === "mobile" && v.length === 10;
+  applyContactState(key, el, readyToShow);
+  onText(key, v);
+}
+
+// Email has no fixed length like mobile does, so there's no natural
+// "they just finished typing" trigger during input — blur (leaving the
+// field) is the best available signal instead. This is scoped to email
+// ONLY: mobile deliberately does NOT use blur, since a short partial
+// number leaving focus (e.g. tabbing away mid-entry) isn't a reliable
+// "done" signal the way it is for a free-text field like email.
+function onEmailBlur(el) {
+  applyContactState("email", el, true);
+}
+
 // ── File handling ─────────────────────────────────────────────────
 function addFiles(newFiles) {
   hideError();
@@ -744,9 +864,11 @@ function updateExtractBtn() {
   var hasFiles = queue.some(function(i){return i.status==="done";});
   var hasAny   = hasFiles || textInputs.mobile || textInputs.email;
   var detecting = queue.some(function(i){return i.status==="detecting";});
+  var hasInvalidContact = !contactValid.mobile || !contactValid.email;
   var btn = document.getElementById("extractBtn");
-  btn.disabled = !hasAny || detecting;
-  if (detecting) btn.textContent = "Detecting documents…";
+  btn.disabled = !hasAny || detecting || hasInvalidContact;
+  if (hasInvalidContact) btn.textContent = "Fix contact details to continue";
+  else if (detecting) btn.textContent = "Detecting documents…";
   else if (!hasAny) btn.textContent = "Select files to continue";
   else {
     var n = queue.filter(function(i){return i.status==="done";}).length;
@@ -760,6 +882,23 @@ function updateExtractBtn() {
 
 // ── Extract ───────────────────────────────────────────────────────
 async function extract() {
+  // Validate contact fields NOW, at the moment of clicking Extract —
+  // this is the one genuinely unambiguous "the operator is done
+  // entering data" signal. Earlier attempts tried validating on blur,
+  // but that falsely flagged fields the operator just hadn't finished
+  // yet (e.g. tabbing to upload a document before finishing the mobile
+  // number). Clicking Extract carries no such ambiguity.
+  var mobileEl = document.getElementById("inp-mobile");
+  var emailEl = document.getElementById("inp-email");
+  applyContactState("mobile", mobileEl, true);
+  applyContactState("email", emailEl, true);
+  if (!contactValid.mobile || !contactValid.email) {
+    var badEl = !contactValid.mobile ? mobileEl : emailEl;
+    badEl.scrollIntoView({behavior: "smooth", block: "center"});
+    badEl.focus();
+    return;  // don't proceed — the now-visible red border + message explain why
+  }
+
   var btn = document.getElementById("extractBtn");
   btn.disabled = true;
   btn.textContent = "Processing…";
@@ -781,7 +920,7 @@ async function extract() {
 
   var timer = setInterval(anim, 800);
   try {
-    showProgress("Running AI extraction…", 45);
+    showProgress("Running Data Extraction…", 45);
     var res = await fetch(API + "/api/v1/process-session", {method:"POST", body:form});
     clearInterval(timer);
     var data = await res.json();
@@ -794,6 +933,7 @@ async function extract() {
 
     showProgress("Done ✓", 100);
     await new Promise(function(r){setTimeout(r,400);});
+    data.exam_code = selectedExam;
     sessionStorage.setItem("smartfill_profile", JSON.stringify(data));
     window.location.href = "/review";
   } catch(err) {
@@ -813,6 +953,23 @@ function showError(m){var e=document.getElementById("errorBar");e.textContent="�
 function hideError(){document.getElementById("errorBar").style.display="none";}
 function truncate(s,n){return s.length>n?s.slice(0,n-1)+"…":s;}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+</script>
+</div>
+<script>
+(async function(){
+  try {
+    const res = await fetch('/auth/me');
+    if (!res.ok) return;
+    const me = await res.json();
+    document.getElementById('sfUserName').textContent = me.name || me.email;
+    document.getElementById('sfUserEmail').textContent = me.name ? me.email : '';
+    if (me.is_admin) {
+      document.getElementById('sfAdminDashLink').style.display = 'flex';
+      document.getElementById('sfAdminExamsLink').style.display = 'flex';
+      document.getElementById('sfAdminDivider').style.display = 'block';
+    }
+  } catch (e) { /* nav still works without user info */ }
+})();
 </script>
 </body>
 </html>

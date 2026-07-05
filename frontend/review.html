@@ -44,12 +44,10 @@
     /* ── Row 2: Action bar (only spans main panel, not sidebar) ── */
     .header-actions{
       display:flex;align-items:center;justify-content:space-between;gap:16px;
-      padding:12px 16px;
+      padding:13px 30px;
       background:var(--surface);
-      border:1px solid var(--border);
-      border-radius:10px;
-      box-shadow:var(--shadow);
-      margin-bottom:12px;
+      border-bottom:1px solid var(--border);
+      box-shadow:0 1px 3px rgba(0,0,0,0.04);
     }
     .action-left{display:flex;flex-direction:column;justify-content:center;}
     .action-title{font-size:16px;font-weight:800;color:var(--text);letter-spacing:-0.3px;line-height:1.2;}
@@ -85,8 +83,8 @@
     .btn-green:disabled{opacity:0.5;cursor:not-allowed;}
 
         /* ── Layout ──────────────────────────── */
-    .layout{flex:1;display:flex;height:calc(100vh - 46px);overflow:hidden;}
-    .main{flex:1;overflow-y:auto;padding:16px 20px 32px;}
+    .layout{flex:1;display:flex;height:100vh;overflow:hidden;}
+    .main{flex:1;overflow-y:auto;padding:0 20px 32px;}
 
     /* #4 compact intro */
     .intro{display:flex;align-items:baseline;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
@@ -233,15 +231,54 @@
 </head>
 <body>
 
-<!-- Row 1: Brand bar -->
-<div class="header-brand">
-  <div class="brand">
-    <div class="brand-logo">S</div>
-    <span class="brand-name">SmartFill <em>AI</em></span>
+<style>
+.sf-sidebar {
+  position: fixed; left: 0; top: 0; width: 220px; height: 100vh;
+  background: #fff; border-right: 1px solid #e4e7ef;
+  display: flex; flex-direction: column; padding: 20px 0;
+  z-index: 1000; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.sf-sidebar .sf-brand { padding: 0 20px 16px; font-size: 17px; font-weight: 800; color: #111827; letter-spacing:-0.3px; border-bottom: 1px solid #f0f2f7; margin-bottom: 12px; }
+.sf-sidebar .sf-brand em { font-style: normal; color: #2563eb; }
+.sf-sidebar .sf-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.sf-sidebar .sf-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  color: #4b5563; text-decoration: none; font-size: 13.5px; font-weight: 500;
+}
+.sf-sidebar .sf-nav a:hover { background: #f4f6fa; color: #111827; }
+.sf-sidebar .sf-nav a.active { background: #eff4ff; color: #2563eb; font-weight: 700; }
+.sf-sidebar .sf-divider { height:1px; background:#f0f2f7; margin: 8px 12px; }
+.sf-sidebar .sf-user { padding: 12px 20px; border-top: 1px solid #f0f2f7; }
+.sf-sidebar .sf-user-name { font-size: 12.5px; font-weight: 600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-sidebar .sf-user-email { font-size: 11px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.sf-sidebar .sf-signout { display:inline-block; margin-top:8px; font-size:12px; color:#6b7280; text-decoration:none; }
+.sf-sidebar .sf-signout:hover { color:#dc2626; }
+.sf-page-wrap { margin-left: 220px; min-height: 100vh; }
+.sf-mobile-toggle { display:none; position:fixed; top:14px; left:14px; z-index:1001; background:#fff; border:1px solid #e4e7ef; border-radius:8px; width:38px; height:38px; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
+@media (max-width: 900px) {
+  .sf-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .sf-sidebar.open { transform: translateX(0); }
+  .sf-page-wrap { margin-left: 0; }
+  .sf-mobile-toggle { display:flex !important; }
+}
+</style>
+<button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
+<nav class="sf-sidebar" id="sfSidebar">
+  <div class="sf-brand">SmartFill <em>AI</em></div>
+  <div class="sf-nav">
+    <a href="/app" class="">Home</a>
+    <a href="/review" class="active">Review</a>
+    <div class="sf-divider" id="sfAdminDivider" style="display:none"></div>
+    <a href="/admin/dashboard" id="sfAdminDashLink" class="" style="display:none">Dashboard</a>
+    <a href="/admin/exams" id="sfAdminExamsLink" class="" style="display:none">Manage Exams</a>
   </div>
-</div>
-
-</div>
+  <div class="sf-user">
+    <div class="sf-user-name" id="sfUserName">&nbsp;</div>
+    <div class="sf-user-email" id="sfUserEmail"></div>
+    <a href="/auth/logout" class="sf-signout">Sign out</a>
+  </div>
+</nav>
+<div class="sf-page-wrap">
 
 <div class="layout">
   <div class="main" id="mainPanel">
@@ -309,7 +346,8 @@ const SECTIONS=[
     {key:"ssc_board",      label:"Board"},
     {key:"ssc_year",       label:"Year"},
     {key:"ssc_percentage", label:"Percentage"},
-    {key:"ssc_marks_identification", label:"Identification Marks"},
+    {key:"ssc_identification_mark_1", label:"Identification Mark 1"},
+    {key:"ssc_identification_mark_2", label:"Identification Mark 2"},
   ]},
   {id:"inter",  title:"Education — Inter",    icon:"📋",fields:[
     {key:"inter_name",       label:"Student Name"},
@@ -366,6 +404,12 @@ const edits={};
 const collapsed={};
 const removedAssets={};
 
+// ── Exam-shaped fields (additive — sits alongside the generic universal
+// field view above; only appears when an exam was selected on the upload
+// page AND that exam has fields configured in the admin exam builder) ──
+let examFields=[];      // [{field_key, display_label, source_profile_key, transform, required}, ...]
+const examEdits={};     // field_key -> manually edited value (separate from `edits`, which is keyed by profile key)
+
 function rawF(k){return profile?profile[k]:null;}
 function getVal(k){
   if(edits[k]!==undefined)return edits[k];
@@ -388,6 +432,14 @@ function getFinal(){
   ["applicant_photo","applicant_signature"].forEach(function(k){
     if(removedAssets[k])return;
     var v=getVal(k);if(v)r[k]=v;
+  });
+  // Overlay exam-shaped fields on top — these are what the Chrome extension
+  // should prefer when filling an exam-specific portal (e.g. "first_name" /
+  // "last_name" instead of just "name"), without discarding the universal
+  // fields underneath for any exam field that isn't configured.
+  examFields.forEach(function(f){
+    var v=getExamVal(f);
+    if(v)r[f.field_key]=v;
   });
   return r;
 }
@@ -494,13 +546,110 @@ function parseDisplay(key, display){
 
 const DATE_KEYS=["dob","doi","doe"];
 
+// ── Exam field transforms ─────────────────────────────────────────────────
+// Mirrors TRANSFORMS in backend/app/schemas/exam.py — keep both in sync.
+function applyTransform(transform, rawVal){
+  if(!rawVal)return "";
+  switch(transform){
+    case "split_first_word":
+      return rawVal.trim().split(/\s+/)[0]||"";
+    case "split_remaining_words":
+      return rawVal.trim().split(/\s+/).slice(1).join(" ");
+    case "uppercase":
+      return rawVal.toUpperCase();
+    case "lowercase":
+      return rawVal.toLowerCase();
+    case "titlecase":
+      return fmtTitleCase(rawVal);
+    case "date_ddmmyyyy":
+      return fmtDate(rawVal); // existing helper: YYYY-MM-DD -> DD/MM/YYYY
+    case "date_mmddyyyy": {
+      var m=rawVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m?m[2]+"/"+m[3]+"/"+m[1]:rawVal;
+    }
+    case "date_yyyymmdd":
+      return rawVal; // already the raw stored format
+    case "verbatim":
+    default:
+      return rawVal;
+  }
+}
+
+function getExamVal(field){
+  if(examEdits[field.field_key]!==undefined)return examEdits[field.field_key];
+  var raw=getVal(field.source_profile_key);
+  if(!raw)return "";
+  return applyTransform(field.transform, raw);
+}
+
+// Same source-detection logic as makeRow() below — reused here so exam
+// fields show the actual document (Aadhaar/PAN/etc.) the value came from,
+// not the internal profile field name, so the operator can validate
+// against the physical document in front of them.
+function srcPillHtml(key){
+  var src=getSrc(key);
+  var srcDisplay=src;
+  if(src==="auto"||!src){
+    if(key==="pan_number"||key==="father_name"&&!getVal("aadhaar_number"))srcDisplay="pan";
+    else if(key==="aadhaar_number"||key==="address_line1")srcDisplay="aadhaar";
+    else srcDisplay="";
+  }
+  var si=SRC_INFO[srcDisplay]||{cls:"pill-auto",label:srcDisplay||""};
+  return srcDisplay&&srcDisplay!=="auto"
+    ?'<span class="pill '+si.cls+'">'+esc(si.label)+'</span>'
+    :'';
+}
+
+function makeExamRow(field){
+  var val=getExamVal(field);
+  var edited=examEdits[field.field_key]!==undefined;
+  var rowCls=edited?"r-edit":(field.required&&!val?"r-warn":"");
+  var flagHtml=edited?' <span class="edit-icon" title="Edited">✎</span>'
+    :(field.required&&!val?' <span class="warn-icon" title="Required">⚠</span>':'');
+  return '<tr class="'+rowCls+'" id="tr-exam-'+field.field_key+'">'+
+    '<td class="td-f">'+esc(field.display_label)+(field.required?' <span style="color:var(--red)">*</span>':'')+'</td>'+
+    '<td class="td-v"><input class="val" id="inp-exam-'+field.field_key+'" value="'+esc(val)+'" '+
+      'placeholder="Not available" oninput="onExamEdit(\''+field.field_key+'\')" /></td>'+
+    '<td class="td-src" id="src-exam-'+field.field_key+'"><div class="src-wrap">'+
+      srcPillHtml(field.source_profile_key)+flagHtml+'</div></td>'+
+    '</tr>';
+}
+
+function onExamEdit(fieldKey){
+  var field=examFields.find(function(f){return f.field_key===fieldKey;});
+  if(!field)return;
+  var inp=document.getElementById("inp-exam-"+fieldKey);
+  var original=getVal(field.source_profile_key)?applyTransform(field.transform, getVal(field.source_profile_key)):"";
+  var cur=inp.value;
+  if(cur!==original)examEdits[fieldKey]=cur;
+  else delete examEdits[fieldKey];
+
+  var tr=document.getElementById("tr-exam-"+fieldKey);
+  var srcTd=document.getElementById("src-exam-"+fieldKey);
+  if(!tr||!srcTd)return;
+  var ed=examEdits[fieldKey]!==undefined;
+  tr.className=ed?"r-edit":(field.required&&!inp.value?"r-warn":"");
+  var flagHtml=ed?' <span class="edit-icon">✎</span>'
+    :(field.required&&!inp.value?' <span class="warn-icon">⚠</span>':'');
+  srcTd.innerHTML='<div class="src-wrap">'+srcPillHtml(field.source_profile_key)+flagHtml+'</div>';
+}
+
 document.addEventListener("DOMContentLoaded",function(){
   try{
     var raw=sessionStorage.getItem("smartfill_profile");
     if(!raw){showEmpty();return;}
     sessionData=JSON.parse(raw);profile=sessionData.profile;
     if(!profile)throw new Error("No profile data");
-    render();renderDocs();renderAssets();updateHdr();
+    var examCode=sessionData.exam_code;
+    if(examCode&&examCode!=="none"){
+      fetch("/api/v1/exams/"+encodeURIComponent(examCode)+"/fields")
+        .then(function(r){return r.ok?r.json():[];})
+        .then(function(fields){examFields=fields||[];})
+        .catch(function(){examFields=[];})
+        .finally(function(){render();renderDocs();renderAssets();updateHdr();});
+    }else{
+      render();renderDocs();renderAssets();updateHdr();
+    }
   }catch(e){showErr(e.message);}
 });
 
@@ -539,6 +688,35 @@ function updateHdr(){
 
 function render(){
   var totalF=0,warnC=0,html="";
+
+  // Exam-shaped section — only appears when an exam was selected AND that
+  // exam has fields configured in the admin exam builder. Sits above the
+  // generic universal field view, which still renders below unchanged.
+  if(examFields.length){
+    var examWarn=0;
+    examFields.forEach(function(f){if(f.required&&!getExamVal(f))examWarn++;});
+    var examCol=collapsed["__exam__"];
+    html+=
+      '<div class="sec"><div class="sec-head" onclick="toggleSec(\'__exam__\')">'+
+        '<div class="sec-left">'+
+          '<span class="sec-icon">🎓</span>'+
+          '<span class="sec-name">Exam Application Fields</span>'+
+          '<span class="sec-count"> ('+examFields.length+')</span>'+
+        '</div>'+
+        '<span class="caret'+(examCol?'':' open')+'" id="caret-__exam__">▲</span>'+
+      '</div>'+
+      '<div class="sec-body'+(examCol?' collapsed':'')+'" id="body-__exam__">'+
+        '<table><colgroup>'+
+          '<col class="c-f"><col class="c-v"><col class="c-s">'+
+        '</colgroup><thead><tr>'+
+          '<th>Field</th><th>Value</th><th>Source</th>'+
+        '</tr></thead><tbody>'+
+        examFields.map(function(f){return makeExamRow(f);}).join("")+
+        '</tbody></table>'+
+      '</div></div>';
+    warnC+=examWarn;
+  }
+
   SECTIONS.forEach(function(sec){
     var rows=sec.fields.filter(function(f){return!!getVal(f.key);});
     /* #10 also show fields from docs uploaded but not found */
@@ -577,9 +755,9 @@ function render(){
   if(subEl)subEl.textContent="· "+sub;
   // Render sticky action bar (INSIDE .main — sticky relative to .main scroll)
   var actionBarHTML=
-    '<div class="header-actions" style="position:sticky;top:0;z-index:50;margin:-16px -20px 12px;border-radius:0;border-left:none;border-right:none;border-top:none;">'+
+    '<div class="header-actions" style="position:sticky;top:0;z-index:50;margin:0 0 20px;">'+
       '<div class="action-left">'+
-        '<div class="action-title">Review Extracted Data</div>'+
+        '<div class="action-title">Review and Edit Extracted Data</div>'+
         '<div class="action-sub" id="staticSub">· '+esc(sub)+'</div>'+
       '</div>'+
       '<div class="action-center">'+
@@ -594,10 +772,18 @@ function render(){
         '<button class="btn-use" id="useBtn" onclick="confirmAndUse()">✓ Use This Data</button>'+
       '</div>'+
     '</div>';
-  // Inject action bar + data tables into scrollable .main
+  // Sticky bar is a DIRECT child of #mainPanel (the actual scrolling
+  // container) — NOT nested inside the padded content wrapper below.
+  // This is deliberate: CSS sticky positioning's "stuck" boundary is
+  // constrained by an element's own parent box, so nesting the sticky
+  // bar inside a padded wrapper (even with a negative-margin trick to
+  // visually cancel that padding) leaves a residual gap once scrolled —
+  // content peeks through above the bar instead of being fully covered.
+  // Keeping it a direct sibling, with its own padding, avoids that
+  // fragile pattern entirely.
   document.getElementById("mainPanel").innerHTML=
-    '<div style="padding:16px 20px 32px">'+
-      actionBarHTML+
+    actionBarHTML+
+    '<div style="padding:0 20px 32px">'+
       html+
     '</div>';
 }
@@ -732,6 +918,8 @@ function formatDocType(t){
   return(t||"Document").replace(/_/g," ").replace(/\b\w/g,function(c){return c.toUpperCase();});
 }
 
+let dataSavedSuccessfully = false;
+
 async function confirmAndUse(){
   var final=getFinal();
   if(!Object.keys(final).length){alert("No fields to save.");return;}
@@ -748,9 +936,10 @@ async function confirmAndUse(){
     });
     var d=await res.json();
     if(!d.ok)throw new Error(d.error||"Failed");
-    btn.textContent="✓ Saved";btn.style.background="#15803d";
+    dataSavedSuccessfully = true;
+    btn.textContent="✓ Saved";btn.style.background="#15803d";btn.style.color="#fff";btn.style.borderColor="#15803d";
     msg.textContent=d.fields+" fields ready";
-    setTimeout(function(){btn.textContent="✓ Use This Data";btn.style.background="";btn.disabled=false;msg.textContent="";},4000);
+    setTimeout(function(){btn.textContent="✓ Use This Data";btn.style.background="";btn.style.color="";btn.style.borderColor="";btn.disabled=false;msg.textContent="";},4000);
   }catch(e){btn.textContent="✓ Use This Data";btn.disabled=false;alert("Save failed: "+e.message);}
 }
 function copyAll(){
@@ -766,6 +955,36 @@ function newSession(){
   if(!confirm("Clear this session and start a new customer?"))return;
   sessionStorage.removeItem("smartfill_profile");window.location.href="/app";
 }
+</script>
+</div>
+<script>
+(async function(){
+  try {
+    const res = await fetch('/auth/me');
+    if (!res.ok) return;
+    const me = await res.json();
+    document.getElementById('sfUserName').textContent = me.name || me.email;
+    document.getElementById('sfUserEmail').textContent = me.name ? me.email : '';
+    if (me.is_admin) {
+      document.getElementById('sfAdminDashLink').style.display = 'flex';
+      document.getElementById('sfAdminExamsLink').style.display = 'flex';
+      document.getElementById('sfAdminDivider').style.display = 'block';
+    }
+  } catch (e) { /* nav still works without user info */ }
+})();
+
+// Warn before leaving with unsaved edits — review page edits (both universal
+// fields and exam-shaped fields) only persist once "Use This Data" is
+// clicked. A persistent nav bar makes it one click easier to accidentally
+// navigate away mid-review, so this guards against silently losing edits.
+window.addEventListener('beforeunload', function(e) {
+  if (dataSavedSuccessfully) return;  // already saved — safe to leave, don't false-warn
+  var hasEdits = Object.keys(edits).length > 0 || Object.keys(examEdits).length > 0;
+  if (hasEdits) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 </script>
 </body>
 </html>

@@ -140,6 +140,10 @@ class DocumentPipeline:
         try:
             prep_result = self._preprocessor.process(path)
         except Exception as exc:
+            logger.error(
+                "Preprocessing crashed | type=%s | %s",
+                doc_type.value, exc, exc_info=True,
+            )
             return ExtractionResult(
                 document_type=doc_type.value,
                 status=DocumentStatus.FAILED,

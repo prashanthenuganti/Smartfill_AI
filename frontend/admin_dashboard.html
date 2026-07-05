@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartFill AI — Admin Dashboard</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#f4f6fa; color:#111827; padding:32px;
+  }
+  .header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .brand{ font-size:20px; font-weight:800; letter-spacing:-0.3px; }
+  .brand em{ font-style:normal; color:#2563eb; }
+  .logout{ color:#6b7280; font-size:13px; text-decoration:none; }
+  .logout:hover{ color:#111827; }
+
+  .stat-row{ display:flex; gap:16px; margin-bottom:28px; }
+  .stat-card{
+    background:#fff; border:1px solid #e4e7ef;
+    border-radius:12px; padding:20px 24px; flex:1;
+    box-shadow:0 1px 4px rgba(0,0,0,0.07);
+  }
+  .stat-label{ font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+  .stat-value{ font-size:32px; font-weight:800; color:#111827; }
+
+  .panel{
+    background:#fff; border:1px solid #e4e7ef;
+    border-radius:12px; padding:24px; margin-bottom:24px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.07);
+  }
+  .panel-title{ font-size:14px; font-weight:700; margin-bottom:18px; color:#111827; }
+
+  #chart{ width:100%; height:200px; }
+  .bar{ fill:#2563eb; }
+  .bar:hover{ fill:#1d4ed8; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; color:#6b7280; font-weight:500; padding:8px 10px; border-bottom:1px solid #e4e7ef; }
+  td{ padding:8px 10px; border-bottom:1px solid #f0f2f7; color:#374151; }
+  .badge{ font-size:11px; padding:2px 8px; border-radius:10px; }
+  .badge.login{ background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+  .badge.logout{ background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+
+  .loading{ color:#9ca3af; font-size:13px; padding:20px 0; }
+</style>
+</head>
+<body>
+  <style>
+.sf-sidebar {
+  position: fixed; left: 0; top: 0; width: 220px; height: 100vh;
+  background: #fff; border-right: 1px solid #e4e7ef;
+  display: flex; flex-direction: column; padding: 20px 0;
+  z-index: 1000; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.sf-sidebar .sf-brand { padding: 0 20px 16px; font-size: 17px; font-weight: 800; color: #111827; letter-spacing:-0.3px; border-bottom: 1px solid #f0f2f7; margin-bottom: 12px; }
+.sf-sidebar .sf-brand em { font-style: normal; color: #2563eb; }
+.sf-sidebar .sf-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.sf-sidebar .sf-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  color: #4b5563; text-decoration: none; font-size: 13.5px; font-weight: 500;
+}
+.sf-sidebar .sf-nav a:hover { background: #f4f6fa; color: #111827; }
+.sf-sidebar .sf-nav a.active { background: #eff4ff; color: #2563eb; font-weight: 700; }
+.sf-sidebar .sf-divider { height:1px; background:#f0f2f7; margin: 8px 12px; }
+.sf-sidebar .sf-user { padding: 12px 20px; border-top: 1px solid #f0f2f7; }
+.sf-sidebar .sf-user-name { font-size: 12.5px; font-weight: 600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-sidebar .sf-user-email { font-size: 11px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.sf-sidebar .sf-signout { display:inline-block; margin-top:8px; font-size:12px; color:#6b7280; text-decoration:none; }
+.sf-sidebar .sf-signout:hover { color:#dc2626; }
+.sf-page-wrap { margin-left: 220px; min-height: 100vh; }
+.sf-mobile-toggle { display:none; position:fixed; top:14px; left:14px; z-index:1001; background:#fff; border:1px solid #e4e7ef; border-radius:8px; width:38px; height:38px; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
+@media (max-width: 900px) {
+  .sf-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .sf-sidebar.open { transform: translateX(0); }
+  .sf-page-wrap { margin-left: 0; }
+  .sf-mobile-toggle { display:flex !important; }
+}
+</style>
+<button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
+<nav class="sf-sidebar" id="sfSidebar">
+  <div class="sf-brand">SmartFill <em>AI</em></div>
+  <div class="sf-nav">
+    <a href="/app" class="">Home</a>
+    <a href="/review" class="">Review</a>
+    <div class="sf-divider" id="sfAdminDivider" style="display:none"></div>
+    <a href="/admin/dashboard" id="sfAdminDashLink" class="active" style="display:none">Dashboard</a>
+    <a href="/admin/exams" id="sfAdminExamsLink" class="" style="display:none">Manage Exams</a>
+  </div>
+  <div class="sf-user">
+    <div class="sf-user-name" id="sfUserName">&nbsp;</div>
+    <div class="sf-user-email" id="sfUserEmail"></div>
+    <a href="/auth/logout" class="sf-signout">Sign out</a>
+  </div>
+</nav>
+<div class="sf-page-wrap">
+
+<div class="header">
+    <div class="brand">SmartFill <em>AI</em> — Admin</div>
+    <div style="display:flex;align-items:center;gap:20px">
+      <a class="logout" href="/admin/exams">Manage Exams</a>
+      <a class="logout" href="/auth/logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value" id="totalUsers">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Logged In Today</div>
+      <div class="stat-value" id="todayLogins">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Daily Active Users — Last 30 Days</div>
+    <div id="chart" class="loading">Loading…</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Recent Activity</div>
+    <div id="activityTable" class="loading">Loading…</div>
+  </div>
+
+  <script>
+    async function loadStats() {
+      const res = await fetch("/api/v1/admin/stats");
+      if (!res.ok) {
+        document.body.innerHTML = "<p style='color:#dc2626;padding:40px'>Access denied or not logged in. <a href='/login' style='color:#2563eb'>Sign in</a></p>";
+        return;
+      }
+      const data = await res.json();
+      document.getElementById("totalUsers").textContent = data.total_users;
+      document.getElementById("todayLogins").textContent = data.today_logins;
+      renderChart(data.daily_active_users);
+      renderActivity(data.recent_events);
+    }
+
+    function renderChart(days) {
+      const el = document.getElementById("chart");
+      const max = Math.max(1, ...days.map(d => d.count));
+      const w = 900, h = 200, barW = w / days.length;
+      let bars = "";
+      days.forEach((d, i) => {
+        const barH = (d.count / max) * (h - 30);
+        const x = i * barW;
+        const y = h - barH - 20;
+        bars += `<rect class="bar" x="${x + 1}" y="${y}" width="${barW - 2}" height="${barH}" rx="2">
+          <title>${d.date}: ${d.count} user(s)</title>
+        </rect>`;
+        if (i % 5 === 0) {
+          bars += `<text x="${x}" y="${h - 4}" fill="#9ca3af" font-size="9">${d.date.slice(5)}</text>`;
+        }
+      });
+      el.className = "";
+      el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="200">${bars}</svg>`;
+    }
+
+    function renderActivity(events) {
+      const el = document.getElementById("activityTable");
+      if (!events.length) {
+        el.innerHTML = "<p style='color:#9ca3af;font-size:13px'>No activity yet.</p>";
+        return;
+      }
+      let rows = events.map(e => `
+        <tr>
+          <td>${e.email}</td>
+          <td><span class="badge ${e.event_type}">${e.event_type}</span></td>
+          <td>${new Date(e.timestamp + "Z").toLocaleString()}</td>
+        </tr>
+      `).join("");
+      el.className = "";
+      el.innerHTML = `<table>
+        <thead><tr><th>Email</th><th>Event</th><th>Time</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    loadStats();
+  </script>
+</div>
+<script>
+(async function(){
+  try {
+    const res = await fetch('/auth/me');
+    if (!res.ok) return;
+    const me = await res.json();
+    document.getElementById('sfUserName').textContent = me.name || me.email;
+    document.getElementById('sfUserEmail').textContent = me.name ? me.email : '';
+    if (me.is_admin) {
+      document.getElementById('sfAdminDashLink').style.display = 'flex';
+      document.getElementById('sfAdminExamsLink').style.display = 'flex';
+      document.getElementById('sfAdminDivider').style.display = 'block';
+    }
+  } catch (e) { /* nav still works without user info */ }
+})();
+</script>
+</body>
+</html>

@@ -47,3 +47,6 @@ backend/uploads/
 
 # Chrome Extension build
 chrome-extension/dist/
+
+#Database
+*.db

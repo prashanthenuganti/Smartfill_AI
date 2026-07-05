@@ -34,7 +34,31 @@
       "Bash(curl -s -m 5 http://127.0.0.1:8000/api/v1/health)",
       "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_exam.py')",
       "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_exam_dense.py')",
-      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_switch.py')"
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_switch.py')",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --remote-debugging-port=9333 '--user-data-dir=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/chrome-profile3' about:blank)",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_regression.py')",
+      "Bash(powershell -Command \"Get-Process -Name python -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime\")",
+      "Bash(curl -s -m 3 http://127.0.0.1:8000/api/v1/health)",
+      "Bash(powershell -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''python.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*uvicorn*'\\\\'' } | Select-Object ProcessId,CommandLine')",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(powershell -Command \"Stop-Process -Id 24480 -Force\")",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --remote-debugging-port=9333 '--user-data-dir=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/chrome-profile4' about:blank)",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_savefix.py')",
+      "Bash(curl -s -X DELETE http://127.0.0.1:8000/api/v1/clear-session)",
+      "Bash(railway --version)",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git tag *)",
+      "Bash(git push *)",
+      "Bash(curl -s -m 10 https://web-production-a52e0.up.railway.app/app)",
+      "Bash(curl -s -m 10 https://web-production-a52e0.up.railway.app/api/v1/health)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/v1/process-session -F 'files=@C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/test_aadhaar.jpg' -F document_types=aadhaar)",
+      "Bash(curl -s -m 60 -X POST https://web-production-a52e0.up.railway.app/api/v1/process-session -F 'files=@C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/test_aadhaar.jpg' -F document_types=aadhaar -o 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/railway_response.json' -w 'HTTP %{http_code}\\\\n')",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --remote-debugging-port=9333 '--user-data-dir=C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/chrome-profile5' about:blank)",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_test_railway_browser.py')",
+      "Bash(python 'C:\\\\Users\\\\prash\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-prash-OneDrive-Documents-GitHub-Smartfill-AI\\\\702f8fea-040b-477b-8e4c-561be5f9ba3b\\\\scratchpad/cdp_check_values.py')"
     ]
   }
 }

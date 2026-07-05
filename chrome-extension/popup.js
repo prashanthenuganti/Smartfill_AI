@@ -14,7 +14,31 @@
 
 "use strict";
 
-const API = "https://web-production-a52e0.up.railway.app";
+// Auto-detects which backend to use — tries your local dev server
+// first (fast timeout), falls back to the deployed Railway backend if
+// nothing's running locally. This means you never have to remember to
+// manually flip this between local testing and normal day-to-day use —
+// whichever one is actually reachable gets used automatically.
+const LOCAL_API = "http://127.0.0.1:8000";
+const RAILWAY_API = "https://web-production-a52e0.up.railway.app";
+let API = RAILWAY_API;  // default until resolveApiBase() runs
+
+async function resolveApiBase() {
+  try {
+    const r = await fetch(`${LOCAL_API}/api/v1/health`, {
+      signal: AbortSignal.timeout(1200),
+    });
+    if (r.ok) {
+      API = LOCAL_API;
+      console.log("[SmartFill AI] Using local backend:", LOCAL_API);
+      return;
+    }
+  } catch {
+    // local backend not reachable — fall through to Railway
+  }
+  API = RAILWAY_API;
+  console.log("[SmartFill AI] Using Railway backend:", RAILWAY_API);
+}
 
 const PROFILE_DISPLAY = [
   { key: "name",            label: "Name" },
@@ -44,6 +68,7 @@ let state = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  await resolveApiBase();
   await checkHealth();
   bindEvents();
   await loadProfile();
@@ -80,6 +105,7 @@ async function loadProfile() {
   setPageStatus("⏳", "Loading profile…");
   try {
     const r = await fetch(`${API}/api/v1/get-session`, {
+      credentials: "include",
       signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) throw new Error("Backend error");
@@ -122,7 +148,7 @@ async function loadProfile() {
 
 async function clearProfile() {
   try {
-    await fetch(`${API}/api/v1/clear-session`, { method: "DELETE" });
+    await fetch(`${API}/api/v1/clear-session`, { method: "DELETE", credentials: "include" });
   } catch {}
   state.profile = null;
   state.mapping = {};

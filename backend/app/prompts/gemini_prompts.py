@@ -98,9 +98,9 @@ Extract ALL visible fields:
   "father_name":      "Name after C/O or S/O in the address block. Title case. NOT the cardholder.",
   "address_line1":    "First address line: house/flat number and building. e.g. MD085 Block 7",
   "address_line2":    "Second address line: street or locality. e.g. KL Mahendra Nagar",
-  "address_city":     "City or town name. Title case.",
-  "address_district": "District name. Title case.",
-  "address_state":    "State name. Title case. e.g. Telangana",
+  "address_city":     "City/town/village name (VTC). TWO CASES — check which applies:\n     CASE A (e-Aadhaar, labels present): use the value next to the label literally printed 'VTC:'.\n     CASE B (physical/PVC card, address is one continuous unlabeled block): the VTC is usually the FIRST place-name-like word/phrase after the street/locality, often repeated once (e.g. '...Bhupalpalle Jayashankar Bhupalpally...' — 'Bhupalpalle' here is the VTC).\n     Title case.",
+  "address_district": "District name. TWO CASES — check which applies:\n     CASE A (e-Aadhaar, labels present): use ONLY the value next to the label literally printed 'District:'. e-Aadhaar cards ALSO print a separate 'Sub District:' label nearby (a smaller division inside the district, e.g. a mandal/taluk) — that is a DIFFERENT value, do not use it here even though it sits right next to 'District:'. Verified example: card shows 'Sub District: Madhira' and 'District: Khammam' → address_district is 'Khammam', not 'Madhira'.\n     CASE B (physical/PVC card, no labels — address is one continuous run of place names before the state): district is normally the LAST place-name-like word/phrase immediately before the state name. Verified example: unlabeled address reads '...MD-85 K.L Mahendra Nagar, Bhupalpalle Jayashankar Bhupalpally, Telangana - 506169' → the word right before 'Telangana' is 'Jayashankar Bhupalpally' — that is the district (NOT 'Bhupalpalle', which appears earlier in the same string as the VTC/sub-district and is a different, smaller place).\n     If genuinely unsure which unlabeled word is the district, still give your best single guess rather than returning null — a downstream check will flag it for the operator to verify either way.\n     Title case.",
+  "address_state":    "State name — the state is reliable to find even on unlabeled cards: it is normally the LAST place-name word before the PIN code (often after a comma or hyphen, e.g. '...Telangana - 506169'). Title case. e.g. Telangana",
   "address_pincode":  "6-digit PIN code. Digits only."
 }
 """,
@@ -241,7 +241,8 @@ Extract:
   "ssc_board":      "Board of education. e.g. BSEAP, CBSE, ICSE.",
   "ssc_year":       "Year of passing. 4-digit year only.",
   "ssc_percentage": "Overall percentage as printed. e.g. 92.5. Include % symbol.",
-  "ssc_marks_identification": "Physical identification marks/remarks printed on the memo — NOT exam marks or grades. Usually a short handwritten or printed note near the bottom, e.g. 'A mole on the neck', 'Scar on left hand', 'Mole on right cheek'. Copy the exact text as printed. If none is printed, return null."
+  "ssc_identification_mark_1": "The FIRST physical identification mark/remark printed on the memo — NOT exam marks or grades. SSC memos commonly print these as a numbered list, e.g. '1. A mole on the neck  2. A mole on left hand middle finger', or as two separate lines/fields on the document itself. Extract only the first one. Copy the exact text as printed (without the leading '1.' number). If none is printed, return null.",
+  "ssc_identification_mark_2": "The SECOND physical identification mark/remark printed on the memo, if a second one exists (see ssc_identification_mark_1 for context). Copy the exact text as printed (without the leading '2.' number). If only one mark is printed, or none at all, return null — do NOT invent a second mark."
 }
 """,
 

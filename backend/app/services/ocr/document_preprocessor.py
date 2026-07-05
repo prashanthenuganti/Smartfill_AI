@@ -298,9 +298,13 @@ class DocumentPreprocessor:
         if lines is None:
             return arr, 0.0
 
+        # cv2.HoughLinesP's return shape varies by OpenCV build/version —
+        # normally (N, 1, 4), but sometimes (N, 4) directly. reshape(-1, 4)
+        # normalises either case so the unpack below never fails.
+        lines = lines.reshape(-1, 4)
+
         angles = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
+        for x1, y1, x2, y2 in lines:
             if x2 != x1:
                 angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
                 if abs(angle) < MAX_DESKEW_ANGLE:

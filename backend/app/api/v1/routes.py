@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from backend.app.core.exceptions import (
     CorruptedFileError, FileTooLargeError, UnsupportedFileTypeError,
 )
+from backend.app.core.auth import require_login, redirect_if_not_logged_in
 from backend.app.core.logging import get_logger
 from backend.app.schemas.documents import (
     DOCUMENT_LABELS, MILESTONE_2_TYPES, DocumentType, UploadedFile,
@@ -58,8 +59,19 @@ def _error(http_status: int, error_code: str, message: str,
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
+@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+async def login_page():
+    html_path = Path(__file__).parents[4] / "frontend" / "login.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>login.html not found</h1>", status_code=404)
+
+
 @router.get("/app", response_class=HTMLResponse, include_in_schema=False)
-async def upload_page():
+async def upload_page(request: Request):
+    redirect = redirect_if_not_logged_in(request)
+    if redirect:
+        return redirect
     html_path = Path(__file__).parents[4] / "frontend" / "upload.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
@@ -67,7 +79,10 @@ async def upload_page():
 
 
 @router.get("/review", response_class=HTMLResponse, include_in_schema=False)
-async def review_page():
+async def review_page(request: Request):
+    redirect = redirect_if_not_logged_in(request)
+    if redirect:
+        return redirect
     html_path = Path(__file__).parents[4] / "frontend" / "review.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
@@ -82,39 +97,54 @@ async def health_check() -> dict:
 
 
 # ── Session profile storage ───────────────────────────────────────────────────
-# Simple in-memory store — one active session at a time per server.
-# Production: replace with Redis or database.
-
-_active_session: dict = {}   # stores the confirmed customer profile
+# Per-operator session store, keyed by the logged-in operator's email —
+# replaces the previous single global dict, which was a real correctness
+# bug: with one shared slot, Operator A's customer data could be
+# silently overwritten by or served to Operator B the moment two
+# operators used the app at the same time. Each operator now only ever
+# sees their own in-progress customer profile.
+#
+# Still in-memory (not Redis/a DB table) — fine for a single-process
+# pilot deployment, but note two real limits: (1) restarting the server
+# clears every operator's in-progress session, and (2) this won't work
+# correctly if you ever run more than one server process/worker, since
+# each process would have its own separate dict. Both are acceptable
+# for now; revisit before a larger multi-instance deployment.
+_sessions: dict[str, dict] = {}
 
 
 @router.post("/api/v1/save-session")
-async def save_session(request: Request) -> JSONResponse:
+async def save_session(request: Request, email: str = Depends(require_login)) -> JSONResponse:
     """Called by review page when operator clicks 'Use This Data'."""
-    global _active_session
     body = await request.json()
     profile = body.get("profile", {})
     if not profile:
         return JSONResponse({"ok": False, "error": "Empty profile"}, status_code=400)
-    _active_session = profile
+    _sessions[email] = profile
     field_count = sum(1 for v in profile.values() if v and isinstance(v, str))
-    logger.info("Session saved | fields=%d", field_count)
+    logger.info("Session saved | operator=%s | fields=%d", email, field_count)
     return JSONResponse({"ok": True, "fields": field_count})
 
 
 @router.get("/api/v1/get-session")
-async def get_session() -> JSONResponse:
-    """Called by Chrome Extension popup to get the current profile."""
-    if not _active_session:
+async def get_session(email: str = Depends(require_login)) -> JSONResponse:
+    """
+    Called by the Chrome Extension popup to get the current operator's
+    profile. Requires login (via credentials: 'include' on the
+    extension's fetch call) specifically so it can look up THIS
+    operator's session, not just whatever the last person to use the
+    app saved.
+    """
+    profile = _sessions.get(email)
+    if not profile:
         return JSONResponse({"ok": False, "profile": None})
-    return JSONResponse({"ok": True, "profile": _active_session})
+    return JSONResponse({"ok": True, "profile": profile})
 
 
 @router.delete("/api/v1/clear-session")
-async def clear_session() -> JSONResponse:
-    """Clear the active session."""
-    global _active_session
-    _active_session = {}
+async def clear_session(email: str = Depends(require_login)) -> JSONResponse:
+    """Clear the current operator's active session only — not everyone's."""
+    _sessions.pop(email, None)
     return JSONResponse({"ok": True})
 
 
@@ -138,6 +168,7 @@ async def process_session(
     document_types: str = Form(default=""),
     manual_mobile: str = Form(default=""),
     manual_email: str = Form(default=""),
+    _email: str = Depends(require_login),
 ) -> JSONResponse:
     """
     Process one file per document type slot.
@@ -252,12 +283,22 @@ async def process_session(
         profile.verified_fields, profile.processing_time_ms,
     )
 
-    # Inject manually entered contact details directly into profile
+    # Inject manually entered contact details directly into profile,
+    # preserving the same ProfileField shape ({value, confidence, ...})
+    # as every other field, so the review page renders them consistently.
     profile_dict = profile.model_dump()
     if manual_mobile and manual_mobile.strip():
-        profile_dict["mobile"] = manual_mobile.strip()
+        profile_dict["mobile"] = {
+            "value": manual_mobile.strip(), "confidence": 100.0,
+            "needs_review": False, "source_doc": "manual",
+            "candidates": [], "match_count": 1,
+        }
     if manual_email and manual_email.strip():
-        profile_dict["email"] = manual_email.strip()
+        profile_dict["email"] = {
+            "value": manual_email.strip(), "confidence": 100.0,
+            "needs_review": False, "source_doc": "manual",
+            "candidates": [], "match_count": 1,
+        }
 
     return JSONResponse(status_code=200, content={
         "status":          "success",
@@ -324,13 +365,24 @@ async def map_fields(request: Request) -> JSONResponse:
     # ONE generic "Identification Marks" / "Visible Identification Marks"
     # field rather than separate SSC/Inter/Degree-specific ones (the common
     # case — government forms ask for this once, not per-certificate).
+    # SSC memos are now split into two numbered marks (ssc_identification_mark_1/2)
+    # since that's how they're actually printed — combine them back into one
+    # string here for forms that want a single field.
     # Prefer the most senior certificate's value (degree > inter > ssc)
     # since that's usually the most recently issued/most relevant one,
     # falling back to whichever is actually populated.
     if not profile.get("marks_identification"):
-        for key in ("degree_marks_identification", "inter_marks_identification", "ssc_marks_identification"):
-            if profile.get(key):
-                profile["marks_identification"] = profile[key]
+        ssc_marks = ", ".join(filter(None, [
+            profile.get("ssc_identification_mark_1"),
+            profile.get("ssc_identification_mark_2"),
+        ]))
+        for key, value in (
+            ("degree_marks_identification", profile.get("degree_marks_identification")),
+            ("inter_marks_identification", profile.get("inter_marks_identification")),
+            ("ssc_marks_identification", ssc_marks),
+        ):
+            if value:
+                profile["marks_identification"] = value
                 break
 
     if not fields:
@@ -378,7 +430,7 @@ Profile keys:
   PASSPORT:  doi (date of issue), doe (date of expiry)
   EDUCATION: degree, specialization, university, college, year_of_passing, percentage,
              ssc_roll, ssc_percentage, inter_roll, inter_percentage,
-             ssc_marks_identification, inter_marks_identification, degree_marks_identification,
+             ssc_identification_mark_1, ssc_identification_mark_2, inter_marks_identification, degree_marks_identification,
              marks_identification (generic — use this for a single combined
              "Identification Marks" field that isn't certificate-specific)
   BANKING:   account_number, ifsc, bank_name, branch
@@ -418,7 +470,7 @@ JSON now:"""
         else:
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             response = client.messages.create(
-                model="claude-haiku-4-5",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -571,6 +623,14 @@ def _keyword_map_fields(fields: list, profile: dict) -> dict:
             "visible identification marks","identification marks","identification mark",
             "distinguishing marks","distinguishing mark","visible marks",
         ]),
+        ("ssc_identification_mark_1", [
+            "identification mark 1","identification mark1","visible mark of identification 1",
+            "permanent visible mark of identification 1","distinguishing mark 1",
+        ]),
+        ("ssc_identification_mark_2", [
+            "identification mark 2","identification mark2","visible mark of identification 2",
+            "permanent visible mark of identification 2","distinguishing mark 2",
+        ]),
 
         # ── Banking ──────────────────────────────────────────────────────────
         ("account_number",  ["account number","bank account number","acc no"]),
@@ -643,6 +703,7 @@ def _keyword_map_fields(fields: list, profile: dict) -> dict:
 async def classify_document(
     pipeline: PipelineDep,
     files: list[UploadFile] = File(default=[]),
+    _email: str = Depends(require_login),
 ) -> JSONResponse:
     """
     Fast document type detection — runs OCR on a small thumbnail

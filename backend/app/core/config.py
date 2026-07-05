@@ -1,15 +1,18 @@
 """
 core/config.py
 --------------
-Centralised application configuration for Milestone 2.
+Centralised application configuration.
 
-New settings added:
-  - ANTHROPIC_API_KEY       : for AI extraction layer
-  - SURYA_ENABLED           : toggle Surya OCR tier 2
-  - AI_EXTRACTION_ENABLED   : toggle Haiku AI extraction
-  - AI_MODEL                : which Anthropic model to use
-  - OCR_TIER2_CONFIDENCE    : threshold to escalate to Surya
-  - OCR_TIER3_CONFIDENCE    : threshold to escalate to AI vision
+New settings added for Google login + admin dashboard:
+  - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET : OAuth credentials from
+    Google Cloud Console (APIs & Services → Credentials)
+  - SESSION_SECRET_KEY : random string used to sign session cookies.
+    Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
+  - ADMIN_EMAILS       : comma-separated list of emails allowed to view
+    the /admin/dashboard page
+  - DATABASE_URL       : Postgres connection string. On Railway, add a
+    Postgres plugin and this is auto-injected — no manual .env edit needed
+    there. Locally, falls back to a SQLite file if not set.
 """
 
 from functools import lru_cache
@@ -40,20 +43,16 @@ class Settings(BaseSettings):
 
     # ── OCR Tier 2: Surya ─────────────────────────────────────────────────────
     surya_enabled: bool = Field(default=True)
-    # Confidence below which Tesseract result is sent to Surya
     ocr_tier2_confidence: int = Field(default=60, ge=0, le=100)
-    # Surya device: "cpu" or "cuda" (auto-detected if not set)
     surya_device: Optional[str] = Field(default=None)
 
     # ── Vision Engine ────────────────────────────────────────────────────────
-    # "claude" = testing with Haiku 4.5 (uses ANTHROPIC_API_KEY)
-    # "gemini" = production with Gemini 2.5 Flash (uses GEMINI_API_KEY)
     vision_engine: str = Field(default="claude")
 
-    # ── Claude (Haiku 4.5 — testing) ─────────────────────────────────────────
+    # ── Claude (Haiku 4.5) ────────────────────────────────────────────────────
     anthropic_api_key: Optional[str] = Field(default=None)
     ai_extraction_enabled: bool = Field(default=True)
-    ai_model: str = Field(default="claude-haiku-4-5")
+    ai_model: str = Field(default="claude-haiku-4-5-20251001")
     ai_max_tokens: int = Field(default=1024)
     ocr_tier3_confidence: int = Field(default=50, ge=0, le=100)
 
@@ -73,6 +72,28 @@ class Settings(BaseSettings):
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     allowed_origins: List[str] = Field(default=["http://localhost:3000"])
+
+    # ── Google OAuth Login ───────────────────────────────────────────────────
+    google_client_id: Optional[str] = Field(default=None)
+    google_client_secret: Optional[str] = Field(default=None)
+    session_secret_key: str = Field(default="dev-insecure-change-me-in-env")
+
+    # Plain string on purpose — NOT List[str]. pydantic-settings tries to
+    # JSON-decode any List-typed env var before validators even run, which
+    # crashes on a plain comma-separated value like "a@x.com,b@x.com".
+    # Use the admin_emails property below to get the parsed list.
+    admin_emails_raw: str = Field(default="", alias="ADMIN_EMAILS")
+
+    @property
+    def admin_emails(self) -> List[str]:
+        return [e.strip() for e in self.admin_emails_raw.split(",") if e.strip()]
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
+    # ── Database (Postgres via Railway, or local SQLite fallback) ────────────
+    database_url: str = Field(default="sqlite:///./smartfill_local.db")
 
     # ── Derived ───────────────────────────────────────────────────────────────
     @property

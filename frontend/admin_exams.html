@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartFill AI — Manage Exams</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#f4f6fa; color:#111827; padding:32px;
+  }
+  .header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .brand{ font-size:20px; font-weight:800; letter-spacing:-0.3px; }
+  .brand em{ font-style:normal; color:#2563eb; }
+  .nav a{ color:#6b7280; font-size:13px; text-decoration:none; margin-left:20px; }
+  .nav a:hover{ color:#111827; }
+
+  .layout{ display:grid; grid-template-columns:300px 1fr; gap:20px; align-items:start; }
+  .panel{
+    background:#fff; border:1px solid #e4e7ef;
+    border-radius:12px; padding:20px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.07);
+  }
+  .panel-title{ font-size:13px; font-weight:700; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; color:#111827; }
+
+  .exam-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 10px; border-radius:8px; cursor:pointer; font-size:13px;
+    color:#374151; margin-bottom:2px;
+  }
+  .exam-item:hover{ background:#eef1f8; }
+  .exam-item.active{ background:#eff4ff; color:#2563eb; }
+  .exam-item-main{ display:flex; flex-direction:column; }
+  .exam-item-code{ font-size:10px; color:#9ca3af; font-family:ui-monospace,monospace; }
+  .exam-item .badge{ font-size:10px; padding:1px 6px; border-radius:8px; background:#f4f6fa; border:1px solid #e4e7ef; color:#6b7280; }
+  .exam-item.inactive{ opacity:0.5; }
+
+  input, select{
+    width:100%; padding:8px 10px; background:#fff; border:1px solid #e4e7ef;
+    border-radius:7px; color:#111827; font-size:13px; margin-bottom:8px;
+  }
+  input:focus, select:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px #eff4ff; }
+  label{ font-size:11px; color:#6b7280; display:block; margin-bottom:4px; margin-top:10px; font-weight:600; }
+  button{
+    padding:8px 14px; border:none; border-radius:7px; font-size:12px; font-weight:600;
+    cursor:pointer; background:#2563eb; color:#fff;
+  }
+  button:hover{ background:#1d4ed8; }
+  button.ghost{ background:#f4f6fa; color:#374151; border:1px solid #e4e7ef; }
+  button.ghost:hover{ background:#eef1f8; }
+  button.danger{ background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+  button.danger:hover{ background:#fee2e2; }
+  button.small{ padding:4px 9px; font-size:11px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+  th{ text-align:left; color:#6b7280; font-weight:600; padding:6px 8px; border-bottom:1px solid #e4e7ef; }
+  td{ padding:6px 8px; border-bottom:1px solid #f0f2f7; vertical-align:middle; color:#374151; }
+  td code{ background:#f4f6fa; padding:1px 5px; border-radius:4px; font-size:11px; }
+  .empty{ color:#9ca3af; font-size:13px; padding:16px 0; text-align:center; }
+  .col-no{ width:32px; color:#9ca3af; }
+
+  .field-form{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:end;
+    background:#f9fafc; padding:12px; border-radius:9px; margin-top:14px; border:1px solid #e4e7ef;
+  }
+  .field-form label{ margin-top:0; }
+  .field-form input, .field-form select{ margin-bottom:0; }
+
+  .spec-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+  .spec-box{ background:#f9fafc; padding:14px; border-radius:9px; border:1px solid #e4e7ef; }
+  .spec-box h4{ font-size:12px; color:#6b7280; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; }
+  .spec-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  .section-gap{ margin-top:28px; }
+  .hint{ font-size:11px; color:#9ca3af; margin-top:4px; }
+  .code-tag{ color:#9ca3af; font-weight:400; font-family:ui-monospace,monospace; font-size:13px; }
+</style>
+</head>
+<body>
+  <style>
+.sf-sidebar {
+  position: fixed; left: 0; top: 0; width: 220px; height: 100vh;
+  background: #fff; border-right: 1px solid #e4e7ef;
+  display: flex; flex-direction: column; padding: 20px 0;
+  z-index: 1000; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.sf-sidebar .sf-brand { padding: 0 20px 16px; font-size: 17px; font-weight: 800; color: #111827; letter-spacing:-0.3px; border-bottom: 1px solid #f0f2f7; margin-bottom: 12px; }
+.sf-sidebar .sf-brand em { font-style: normal; color: #2563eb; }
+.sf-sidebar .sf-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.sf-sidebar .sf-nav a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  color: #4b5563; text-decoration: none; font-size: 13.5px; font-weight: 500;
+}
+.sf-sidebar .sf-nav a:hover { background: #f4f6fa; color: #111827; }
+.sf-sidebar .sf-nav a.active { background: #eff4ff; color: #2563eb; font-weight: 700; }
+.sf-sidebar .sf-divider { height:1px; background:#f0f2f7; margin: 8px 12px; }
+.sf-sidebar .sf-user { padding: 12px 20px; border-top: 1px solid #f0f2f7; }
+.sf-sidebar .sf-user-name { font-size: 12.5px; font-weight: 600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sf-sidebar .sf-user-email { font-size: 11px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.sf-sidebar .sf-signout { display:inline-block; margin-top:8px; font-size:12px; color:#6b7280; text-decoration:none; }
+.sf-sidebar .sf-signout:hover { color:#dc2626; }
+.sf-page-wrap { margin-left: 220px; min-height: 100vh; }
+.sf-mobile-toggle { display:none; position:fixed; top:14px; left:14px; z-index:1001; background:#fff; border:1px solid #e4e7ef; border-radius:8px; width:38px; height:38px; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
+@media (max-width: 900px) {
+  .sf-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .sf-sidebar.open { transform: translateX(0); }
+  .sf-page-wrap { margin-left: 0; }
+  .sf-mobile-toggle { display:flex !important; }
+}
+</style>
+<button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
+<nav class="sf-sidebar" id="sfSidebar">
+  <div class="sf-brand">SmartFill <em>AI</em></div>
+  <div class="sf-nav">
+    <a href="/app" class="">Home</a>
+    <a href="/review" class="">Review</a>
+    <div class="sf-divider" id="sfAdminDivider" style="display:none"></div>
+    <a href="/admin/dashboard" id="sfAdminDashLink" class="" style="display:none">Dashboard</a>
+    <a href="/admin/exams" id="sfAdminExamsLink" class="active" style="display:none">Manage Exams</a>
+  </div>
+  <div class="sf-user">
+    <div class="sf-user-name" id="sfUserName">&nbsp;</div>
+    <div class="sf-user-email" id="sfUserEmail"></div>
+    <a href="/auth/logout" class="sf-signout">Sign out</a>
+  </div>
+</nav>
+<div class="sf-page-wrap">
+
+<div class="header">
+    <div class="brand">SmartFill <em>AI</em> — Manage Exams</div>
+    <div class="nav">
+      <a href="/admin/dashboard">Dashboard</a>
+      <a href="/auth/logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Exam list + add new -->
+    <div class="panel">
+      <div class="panel-title">Exams</div>
+      <div id="examList"><div class="empty">Loading…</div></div>
+
+      <div class="section-gap">
+        <label>New exam code</label>
+        <input id="newCode" placeholder="e.g. rrb_ntpc_2027"/>
+        <label>Display name</label>
+        <input id="newName" placeholder="e.g. RRB NTPC 2027"/>
+        <label>Category</label>
+        <select id="newCategory">
+          <option value="railway">Railway</option>
+          <option value="ssc">SSC</option>
+          <option value="banking">Banking</option>
+          <option value="upsc">UPSC</option>
+          <option value="other">Other</option>
+        </select>
+        <button style="width:100%;margin-top:6px" onclick="createExam()">+ Add Exam</button>
+      </div>
+    </div>
+
+    <!-- Selected exam detail -->
+    <div id="detailPanel">
+      <div class="panel"><div class="empty">Select an exam on the left, or add a new one.</div></div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const API = "";
+let exams = [];
+let meta = { transforms: [], field_types: [], profile_keys: [] };
+let selectedExamId = null;
+let selectedExamDetail = null;
+let editingFieldId = null;
+
+async function init() {
+  const [examsRes, metaRes] = await Promise.all([
+    fetch(API + "/api/v1/admin/exams"),
+    fetch(API + "/api/v1/admin/exam-meta"),
+  ]);
+  if (!examsRes.ok || !metaRes.ok) {
+    document.body.innerHTML = "<p style='padding:40px;color:#dc2626'>Access denied. <a href='/login' style='color:#2563eb'>Sign in</a></p>";
+    return;
+  }
+  exams = await examsRes.json();
+  meta = await metaRes.json();
+  renderExamList();
+}
+
+function renderExamList() {
+  const el = document.getElementById("examList");
+  if (!exams.length) { el.innerHTML = "<div class='empty'>No exams yet.</div>"; return; }
+  el.innerHTML = exams.map(e => `
+    <div class="exam-item ${e.id === selectedExamId ? 'active' : ''} ${!e.active ? 'inactive' : ''}" onclick="selectExam(${e.id})">
+      <div class="exam-item-main">
+        <span>${esc(e.display_name)}</span>
+        <span class="exam-item-code">${esc(e.code)}</span>
+      </div>
+      <span class="badge">${e.field_count} fields</span>
+    </div>
+  `).join("");
+}
+
+async function createExam() {
+  const code = document.getElementById("newCode").value.trim();
+  const display_name = document.getElementById("newName").value.trim();
+  const category = document.getElementById("newCategory").value;
+  if (!code || !display_name) { alert("Code and display name are required."); return; }
+
+  const res = await fetch(API + "/api/v1/admin/exams", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ code, display_name, category, active: true }),
+  });
+  if (!res.ok) { const e = await res.json(); alert(e.detail || e.message || "Failed to create exam."); return; }
+  const newExam = await res.json();
+  document.getElementById("newCode").value = "";
+  document.getElementById("newName").value = "";
+  exams.unshift(newExam);
+  renderExamList();
+  selectExam(newExam.id);
+}
+
+async function selectExam(id) {
+  selectedExamId = id;
+  renderExamList();
+  const res = await fetch(API + `/api/v1/admin/exams/${id}`);
+  selectedExamDetail = await res.json();
+  renderDetail();
+}
+
+function renderDetail() {
+  editingFieldId = null;  // form is always freshly rendered in "add" mode — keep state in sync
+  const d = selectedExamDetail;
+  const panel = document.getElementById("detailPanel");
+  panel.innerHTML = `
+    <div class="panel">
+      <div class="panel-title">
+        <span>${esc(d.display_name)} <span class="code-tag">(${esc(d.code)})</span></span>
+        <div>
+          <button class="ghost small" onclick="toggleActive()">${d.active ? 'Deactivate' : 'Activate'}</button>
+          <button class="danger small" onclick="deleteExam()">Delete Exam</button>
+        </div>
+      </div>
+
+      <div class="panel-title" style="margin-top:6px">Application Fields</div>
+      <table>
+        <thead><tr><th class="col-no">#</th><th>Label</th><th>Field Key</th><th>Source / Value</th><th>Transform</th><th>Req.</th><th></th></tr></thead>
+        <tbody id="fieldsBody"></tbody>
+      </table>
+      ${d.fields.length === 0 ? '<div class="empty">No fields configured yet — add one below.</div>' : ''}
+
+      <div class="field-form">
+        <div><label>Display Label</label><input id="fLabel" placeholder="First Name"/></div>
+        <div><label>Field Key</label><input id="fKey" placeholder="first_name"/></div>
+        <div>
+          <label>Field Source</label>
+          <select id="fSourceType" onchange="onSourceTypeChange()">
+            <option value="extracted">From extracted document</option>
+            <option value="fixed">Fixed value (always the same)</option>
+          </select>
+        </div>
+        <div id="fSourceExtractedWrap">
+          <label>Source Profile Field</label>
+          <select id="fSource">${meta.profile_keys.map(k => `<option value="${k}">${k}</option>`).join("")}</select>
+        </div>
+        <div id="fSourceFixedWrap" style="display:none">
+          <label>Fixed Value</label>
+          <input id="fDefaultValue" placeholder="e.g. ENGLISH or NO"/>
+        </div>
+        <div id="fTransformWrap">
+          <label>Transform</label>
+          <select id="fTransform">${meta.transforms.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
+        </div>
+        <div><label>Required</label><select id="fRequired"><option value="true">Yes</option><option value="false">No</option></select></div>
+        <button id="fSubmitBtn" onclick="submitField()">+ Add Field</button>
+        <button id="fCancelBtn" class="ghost" onclick="cancelEdit()" style="display:none">Cancel</button>
+      </div>
+      <div class="hint" id="fFormHint">Field Key is what the Chrome extension will target on the government portal (e.g. "first_name"). "From extracted document" applies a transform to already-extracted data (editable by the operator before filling). "Fixed value" is for fields that are always the same for every applicant at this exam — e.g. "Choice of Language" = ENGLISH — still shown and editable on the review page, just pre-filled with your fixed value instead of coming from a document.</div>
+
+      <div class="section-gap">
+        <div class="panel-title">Photo &amp; Signature Requirements</div>
+        <div class="spec-grid" id="specGrid"></div>
+      </div>
+    </div>
+  `;
+  renderFields();
+  renderSpecs();
+}
+
+function onSourceTypeChange() {
+  const isFixed = document.getElementById("fSourceType").value === "fixed";
+  document.getElementById("fSourceExtractedWrap").style.display = isFixed ? "none" : "";
+  document.getElementById("fSourceFixedWrap").style.display = isFixed ? "" : "none";
+  document.getElementById("fTransformWrap").style.display = isFixed ? "none" : "";
+}
+
+function renderFields() {
+  const body = document.getElementById("fieldsBody");
+  body.innerHTML = selectedExamDetail.fields.map((f, i) => `
+    <tr>
+      <td class="col-no">${i + 1}</td>
+      <td>${esc(f.display_label)}</td>
+      <td><code>${esc(f.field_key)}</code></td>
+      <td>${f.source_profile_key
+          ? esc(f.source_profile_key)
+          : `<span title="Fixed value">Fixed: "${esc(f.default_value || '')}"</span>`}</td>
+      <td>${f.source_profile_key ? esc(f.transform) : '—'}</td>
+      <td>${f.required ? '✓' : '—'}</td>
+      <td>
+        <button class="ghost small" onclick="startEditField(${f.id})">Edit</button>
+        <button class="danger small" onclick="deleteField(${f.id})">Remove</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function submitField() {
+  if (editingFieldId) return updateField();
+  return addField();
+}
+
+async function addField() {
+  const display_label = document.getElementById("fLabel").value.trim();
+  const field_key = document.getElementById("fKey").value.trim();
+  const isFixed = document.getElementById("fSourceType").value === "fixed";
+  const required = document.getElementById("fRequired").value === "true";
+  if (!display_label || !field_key) { alert("Display label and field key are required."); return; }
+
+  let body;
+  if (isFixed) {
+    const default_value = document.getElementById("fDefaultValue").value.trim();
+    if (!default_value) { alert("Enter the fixed value."); return; }
+    body = {
+      display_label, field_key, default_value, transform: "verbatim",
+      field_type: "text", required, sort_order: selectedExamDetail.fields.length + 1,
+    };
+  } else {
+    const source_profile_key = document.getElementById("fSource").value;
+    const transform = document.getElementById("fTransform").value;
+    body = {
+      display_label, field_key, source_profile_key, transform,
+      field_type: "text", required, sort_order: selectedExamDetail.fields.length + 1,
+    };
+  }
+
+  const res = await fetch(API + `/api/v1/admin/exams/${selectedExamId}/fields`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const e = await res.json(); alert(e.detail || e.message || "Failed to add field."); return; }
+  const field = await res.json();
+  selectedExamDetail.fields.push(field);
+  const examInList = exams.find(e => e.id === selectedExamId);
+  if (examInList) examInList.field_count = selectedExamDetail.fields.length;
+  renderExamList();
+  renderDetail();
+}
+
+function startEditField(fieldId) {
+  const field = selectedExamDetail.fields.find(f => f.id === fieldId);
+  if (!field) return;
+
+  editingFieldId = fieldId;
+
+  document.getElementById("fLabel").value = field.display_label;
+  document.getElementById("fKey").value = field.field_key;
+  document.getElementById("fKey").disabled = true;  // backend doesn't support renaming field_key — see hint text below
+  document.getElementById("fRequired").value = field.required ? "true" : "false";
+
+  const isFixed = !field.source_profile_key;
+  document.getElementById("fSourceType").value = isFixed ? "fixed" : "extracted";
+  onSourceTypeChange();
+
+  if (isFixed) {
+    document.getElementById("fDefaultValue").value = field.default_value || "";
+  } else {
+    document.getElementById("fSource").value = field.source_profile_key;
+    document.getElementById("fTransform").value = field.transform;
+  }
+
+  document.getElementById("fSubmitBtn").textContent = "Save Changes";
+  document.getElementById("fCancelBtn").style.display = "";
+  document.getElementById("fFormHint").innerHTML =
+    "Editing <b>" + esc(field.display_label) + "</b>. Field Key can't be changed once created — " +
+    "since the Chrome extension may already be matching against it — remove and re-add the field " +
+    "if you genuinely need a different key.";
+
+  document.querySelector(".field-form").scrollIntoView({behavior: "smooth", block: "center"});
+}
+
+function cancelEdit() {
+  editingFieldId = null;
+  document.getElementById("fLabel").value = "";
+  document.getElementById("fKey").value = "";
+  document.getElementById("fKey").disabled = false;
+  document.getElementById("fDefaultValue").value = "";
+  document.getElementById("fSourceType").value = "extracted";
+  onSourceTypeChange();
+  document.getElementById("fSubmitBtn").textContent = "+ Add Field";
+  document.getElementById("fCancelBtn").style.display = "none";
+  document.getElementById("fFormHint").textContent =
+    'Field Key is what the Chrome extension will target on the government portal (e.g. "first_name"). ' +
+    '"From extracted document" applies a transform to already-extracted data (editable by the operator ' +
+    'before filling). "Fixed value" is for fields that are always the same for every applicant at this ' +
+    'exam — e.g. "Choice of Language" = ENGLISH — still shown and editable on the review page, just ' +
+    'pre-filled with your fixed value instead of coming from a document.';
+}
+
+async function updateField() {
+  const display_label = document.getElementById("fLabel").value.trim();
+  const isFixed = document.getElementById("fSourceType").value === "fixed";
+  const required = document.getElementById("fRequired").value === "true";
+  if (!display_label) { alert("Display label is required."); return; }
+
+  let body;
+  if (isFixed) {
+    const default_value = document.getElementById("fDefaultValue").value.trim();
+    if (!default_value) { alert("Enter the fixed value."); return; }
+    body = { display_label, default_value, source_profile_key: null, transform: "verbatim", required };
+  } else {
+    const source_profile_key = document.getElementById("fSource").value;
+    const transform = document.getElementById("fTransform").value;
+    body = { display_label, source_profile_key, default_value: null, transform, required };
+  }
+
+  const res = await fetch(API + `/api/v1/admin/exams/${selectedExamId}/fields/${editingFieldId}`, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const e = await res.json(); alert(e.detail || e.message || "Failed to update field."); return; }
+  const updated = await res.json();
+
+  const idx = selectedExamDetail.fields.findIndex(f => f.id === editingFieldId);
+  if (idx !== -1) selectedExamDetail.fields[idx] = updated;
+
+  cancelEdit();
+  renderDetail();
+}
+
+async function deleteField(fieldId) {
+  if (!confirm("Remove this field?")) return;
+  await fetch(API + `/api/v1/admin/exams/${selectedExamId}/fields/${fieldId}`, { method: "DELETE" });
+  selectedExamDetail.fields = selectedExamDetail.fields.filter(f => f.id !== fieldId);
+  const examInList = exams.find(e => e.id === selectedExamId);
+  if (examInList) examInList.field_count = selectedExamDetail.fields.length;
+  renderExamList();
+  renderDetail();
+}
+
+function renderSpecs() {
+  const grid = document.getElementById("specGrid");
+  const kinds = ["photo", "signature"];
+  grid.innerHTML = kinds.map(kind => {
+    const spec = selectedExamDetail.photo_specs.find(s => s.asset_type === kind) || {};
+    return `
+      <div class="spec-box">
+        <h4>${kind}</h4>
+        <div class="spec-row">
+          <div><label>Width (px)</label><input id="spec_${kind}_w" type="number" value="${spec.width_px || ''}"/></div>
+          <div><label>Height (px)</label><input id="spec_${kind}_h" type="number" value="${spec.height_px || ''}"/></div>
+          <div><label>Min KB</label><input id="spec_${kind}_min" type="number" value="${spec.min_kb || ''}"/></div>
+          <div><label>Max KB</label><input id="spec_${kind}_max" type="number" value="${spec.max_kb || 50}"/></div>
+        </div>
+        <button class="small" style="margin-top:8px" onclick="saveSpec('${kind}')">Save ${kind} spec</button>
+      </div>
+    `;
+  }).join("");
+}
+
+async function saveSpec(kind) {
+  const width_px = parseInt(document.getElementById(`spec_${kind}_w`).value) || null;
+  const height_px = parseInt(document.getElementById(`spec_${kind}_h`).value) || null;
+  const min_kb = parseInt(document.getElementById(`spec_${kind}_min`).value) || null;
+  const max_kb = parseInt(document.getElementById(`spec_${kind}_max`).value) || 50;
+
+  const res = await fetch(API + `/api/v1/admin/exams/${selectedExamId}/photo-specs`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ asset_type: kind, width_px, height_px, min_kb, max_kb, image_format: "jpg" }),
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || e.message || "Failed to save spec."); return; }
+  const spec = await res.json();
+  selectedExamDetail.photo_specs = selectedExamDetail.photo_specs.filter(s => s.asset_type !== kind);
+  selectedExamDetail.photo_specs.push(spec);
+  alert(`${kind} spec saved.`);
+}
+
+async function toggleActive() {
+  const res = await fetch(API + `/api/v1/admin/exams/${selectedExamId}`, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ active: !selectedExamDetail.active }),
+  });
+  if (!res.ok) { const e = await res.json(); alert(e.detail || e.message || "Failed to update exam."); return; }
+  const updated = await res.json();
+  selectedExamDetail.active = updated.active;
+  const examInList = exams.find(e => e.id === selectedExamId);
+  if (examInList) examInList.active = updated.active;
+  renderExamList();
+  renderDetail();
+}
+
+async function deleteExam() {
+  if (!confirm(`Delete "${selectedExamDetail.display_name}"? This removes all its fields and specs too.`)) return;
+  await fetch(API + `/api/v1/admin/exams/${selectedExamId}`, { method: "DELETE" });
+  exams = exams.filter(e => e.id !== selectedExamId);
+  selectedExamId = null;
+  selectedExamDetail = null;
+  renderExamList();
+  document.getElementById("detailPanel").innerHTML = `<div class="panel"><div class="empty">Select an exam on the left, or add a new one.</div></div>`;
+}
+
+function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+init();
+</script>
+</div>
+<script>
+(async function(){
+  try {
+    const res = await fetch('/auth/me');
+    if (!res.ok) return;
+    const me = await res.json();
+    document.getElementById('sfUserName').textContent = me.name || me.email;
+    document.getElementById('sfUserEmail').textContent = me.name ? me.email : '';
+    if (me.is_admin) {
+      document.getElementById('sfAdminDashLink').style.display = 'flex';
+      document.getElementById('sfAdminExamsLink').style.display = 'flex';
+      document.getElementById('sfAdminDivider').style.display = 'block';
+    }
+  } catch (e) { /* nav still works without user info */ }
+})();
+</script>
+</body>
+</html>

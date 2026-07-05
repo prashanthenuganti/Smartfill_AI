@@ -31,6 +31,8 @@ import re
 from collections import defaultdict
 from typing import Optional
 
+from backend.app.core.districts import normalize_district
+from backend.app.core.validators import validate_aadhaar_number
 from backend.app.core.logging import get_logger
 from backend.app.schemas.extraction import (
     AadhaarExtraction,
@@ -155,7 +157,8 @@ _FIELD_TRUST: dict[str, dict[str, float]] = {
     "ssc_board":       {"certificate_ssc":   25.0},
     "ssc_year":        {"certificate_ssc":   25.0},
     "ssc_percentage":  {"certificate_ssc":   25.0},
-    "ssc_marks_identification": {"certificate_ssc": 25.0},
+    "ssc_identification_mark_1": {"certificate_ssc": 25.0},
+    "ssc_identification_mark_2": {"certificate_ssc": 25.0},
     "inter_name":      {"certificate_inter": 25.0},
     "inter_roll":      {"certificate_inter": 25.0},
     "inter_board":     {"certificate_inter": 25.0},
@@ -226,7 +229,8 @@ _FIELD_MAP: dict[str, str] = {
     "ssc_board":        "ssc_board",
     "ssc_year":         "ssc_year",
     "ssc_percentage":   "ssc_percentage",
-    "ssc_marks_identification": "ssc_marks_identification",
+    "ssc_identification_mark_1": "ssc_identification_mark_1",
+    "ssc_identification_mark_2": "ssc_identification_mark_2",
     # Note: "roll_number" intentionally NOT mapped generically
     # SSC prompt returns "ssc_roll", Inter returns "inter_roll"
     # Degree prompt returns "roll_number" → maps to "roll_number" (degree enrollment no.)
@@ -347,6 +351,14 @@ class FieldMerger:
         populated = sum(1 for f in profile_data.values() if f.value)
         overall_conf = total_confidence / populated if populated else 0.0
 
+        # ── Validate/correct district against the known Telangana list ────────
+        # Catches OCR typos (e.g. "Khamam" -> "Khammam") before they reach a
+        # government form. Runs BEFORE address combination so the corrected
+        # district value is what gets folded into the combined 'address'
+        # field too, not the pre-correction OCR value.
+        self._validate_district(profile_data, fields_needing_review)
+        self._validate_aadhaar(profile_data, fields_needing_review)
+
         # ── Combine structured address parts into a single 'address' field ────
         # Some government forms have only ONE generic "Address" input (no
         # separate Line 1 / Line 2 / City fields). If we have the structured
@@ -370,6 +382,70 @@ class FieldMerger:
             fields_needing_review=fields_needing_review,
             overall_confidence=round(overall_conf, 1),
         )
+
+    def _validate_aadhaar(
+        self, profile_data: dict[str, ProfileField], fields_needing_review: list[str]
+    ) -> None:
+        """
+        Check the extracted Aadhaar number against the real UIDAI format
+        rules (12 digits, doesn't start 0/1) and the Verhoeff checksum
+        actually used for its last digit. This catches OCR/Vision misreads
+        that a plain "is it 12 digits" check would miss — e.g. one digit
+        misread as a visually similar one still passes a length check but
+        fails the checksum.
+
+        Never blocks or alters the value — the operator can still see and
+        correct it on the review page. This only decides whether to flag
+        it for their attention.
+        """
+        field = profile_data.get("aadhaar_number")
+        if not field or not field.value:
+            return  # missing entirely — handled by the existing required-field UX, not this check
+
+        is_valid, _reason = validate_aadhaar_number(field.value)
+        if not is_valid:
+            field.needs_review = True
+            if "aadhaar_number" not in fields_needing_review:
+                fields_needing_review.append("aadhaar_number")
+
+    def _validate_district(
+        self, profile_data: dict[str, ProfileField], fields_needing_review: list[str]
+    ) -> None:
+        """
+        Correct the extracted district against the known Telangana district
+        list (see core/districts.py for the matching logic and its
+        deliberately conservative design). Runs after field selection but
+        before address combination.
+
+        - Exact match (case/spacing only) → silently normalise casing.
+        - Fuzzy match (typo/OCR garbling) → correct the value AND flag it
+          for operator review — never silently substitute a "guessed"
+          district on a government application.
+        - No confident match → leave the value untouched, flag for review
+          (could be a genuinely different state's district, or too garbled
+          to correct reliably — a human should look, not the code guess).
+        """
+        district_field = profile_data.get("address_district")
+        if not district_field or not district_field.value:
+            return
+
+        state_field = profile_data.get("address_state")
+        state_value = state_field.value if state_field else None
+
+        corrected, was_exact = normalize_district(district_field.value, state_value)
+
+        if corrected is None:
+            if "address_district" not in fields_needing_review:
+                fields_needing_review.append("address_district")
+            district_field.needs_review = True
+            return
+
+        if corrected != district_field.value:
+            district_field.value = corrected
+            if not was_exact:
+                district_field.needs_review = True
+                if "address_district" not in fields_needing_review:
+                    fields_needing_review.append("address_district")
 
     def _combine_address_fields(self, profile_data: dict[str, ProfileField]) -> None:
         """

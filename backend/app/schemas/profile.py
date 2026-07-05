@@ -91,7 +91,8 @@ class CustomerProfile(BaseModel):
     ssc_board: ProfileField = Field(default_factory=ProfileField)
     ssc_year: ProfileField = Field(default_factory=ProfileField)
     ssc_percentage: ProfileField = Field(default_factory=ProfileField)
-    ssc_marks_identification: ProfileField = Field(default_factory=ProfileField)
+    ssc_identification_mark_1: ProfileField = Field(default_factory=ProfileField)
+    ssc_identification_mark_2: ProfileField = Field(default_factory=ProfileField)
 
     # ── Education — Intermediate ──────────────────────────────────────────────
     inter_name: ProfileField = Field(default_factory=ProfileField)
