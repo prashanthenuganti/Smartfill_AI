@@ -78,56 +78,7 @@
 </style>
 </head>
 <body>
-  <style>
-.sf-sidebar {
-  position: fixed; left: 0; top: 0; width: 220px; height: 100vh;
-  background: #fff; border-right: 1px solid #e4e7ef;
-  display: flex; flex-direction: column; padding: 20px 0;
-  z-index: 1000; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-}
-.sf-sidebar .sf-brand { padding: 0 20px 16px; font-size: 17px; font-weight: 800; color: #111827; letter-spacing:-0.3px; border-bottom: 1px solid #f0f2f7; margin-bottom: 12px; }
-.sf-sidebar .sf-brand em { font-style: normal; color: #2563eb; }
-.sf-sidebar .sf-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
-.sf-sidebar .sf-nav a {
-  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
-  color: #4b5563; text-decoration: none; font-size: 13.5px; font-weight: 500;
-}
-.sf-sidebar .sf-nav a:hover { background: #f4f6fa; color: #111827; }
-.sf-sidebar .sf-nav a.active { background: #eff4ff; color: #2563eb; font-weight: 700; }
-.sf-sidebar .sf-divider { height:1px; background:#f0f2f7; margin: 8px 12px; }
-.sf-sidebar .sf-user { padding: 12px 20px; border-top: 1px solid #f0f2f7; }
-.sf-sidebar .sf-user-name { font-size: 12.5px; font-weight: 600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sf-sidebar .sf-user-email { font-size: 11px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
-.sf-sidebar .sf-signout { display:inline-block; margin-top:8px; font-size:12px; color:#6b7280; text-decoration:none; }
-.sf-sidebar .sf-signout:hover { color:#dc2626; }
-.sf-page-wrap { margin-left: 220px; min-height: 100vh; }
-.sf-mobile-toggle { display:none; position:fixed; top:14px; left:14px; z-index:1001; background:#fff; border:1px solid #e4e7ef; border-radius:8px; width:38px; height:38px; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
-@media (max-width: 900px) {
-  .sf-sidebar { transform: translateX(-100%); transition: transform .2s; }
-  .sf-sidebar.open { transform: translateX(0); }
-  .sf-page-wrap { margin-left: 0; }
-  .sf-mobile-toggle { display:flex !important; }
-}
-</style>
-<button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
-<nav class="sf-sidebar" id="sfSidebar">
-  <div class="sf-brand">SmartFill <em>AI</em></div>
-  <div class="sf-nav">
-    <a href="/app" class="">Home</a>
-    <a href="/review" class="">Review</a>
-    <div class="sf-divider" id="sfAdminDivider" style="display:none"></div>
-    <a href="/admin/dashboard" id="sfAdminDashLink" class="" style="display:none">Dashboard</a>
-    <a href="/admin/exams" id="sfAdminExamsLink" class="active" style="display:none">Manage Exams</a>
-  </div>
-  <div class="sf-user">
-    <div class="sf-user-name" id="sfUserName">&nbsp;</div>
-    <div class="sf-user-email" id="sfUserEmail"></div>
-    <a href="/auth/logout" class="sf-signout">Sign out</a>
-  </div>
-</nav>
-<div class="sf-page-wrap">
-
-<div class="header">
+  <div class="header">
     <div class="brand">SmartFill <em>AI</em> — Manage Exams</div>
     <div class="nav">
       <a href="/admin/dashboard">Dashboard</a>
@@ -172,6 +123,27 @@ let meta = { transforms: [], field_types: [], profile_keys: [] };
 let selectedExamId = null;
 let selectedExamDetail = null;
 let editingFieldId = null;
+let fKeyManuallyEdited = false;
+
+// This exists specifically because of a real bug: an admin typed the full
+// display label ("Date Of Birth (DD-MM-YYYY)") into Field Key instead of
+// a clean identifier. That created TWO similar-looking profile keys after
+// saving (the raw field AND this oddly-named one), and the Chrome
+// extension's AI field-matching picked the wrong one when filling a real
+// form. Auto-suggesting a clean key from the label prevents this — the
+// admin can still type something different manually if they want to.
+function slugify(text) {
+  return (text || "").toLowerCase().trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+}
+
+function suggestFieldKey() {
+  if (fKeyManuallyEdited) return;
+  document.getElementById("fKey").value = slugify(document.getElementById("fLabel").value);
+}
 
 async function init() {
   const [examsRes, metaRes] = await Promise.all([
@@ -230,6 +202,7 @@ async function selectExam(id) {
 
 function renderDetail() {
   editingFieldId = null;  // form is always freshly rendered in "add" mode — keep state in sync
+  fKeyManuallyEdited = false;
   const d = selectedExamDetail;
   const panel = document.getElementById("detailPanel");
   panel.innerHTML = `
@@ -250,8 +223,8 @@ function renderDetail() {
       ${d.fields.length === 0 ? '<div class="empty">No fields configured yet — add one below.</div>' : ''}
 
       <div class="field-form">
-        <div><label>Display Label</label><input id="fLabel" placeholder="First Name"/></div>
-        <div><label>Field Key</label><input id="fKey" placeholder="first_name"/></div>
+        <div><label>Display Label</label><input id="fLabel" placeholder="First Name" oninput="suggestFieldKey()"/></div>
+        <div><label>Field Key</label><input id="fKey" placeholder="first_name" oninput="fKeyManuallyEdited=true"/></div>
         <div>
           <label>Field Source</label>
           <select id="fSourceType" onchange="onSourceTypeChange()">
@@ -357,6 +330,7 @@ async function addField() {
 }
 
 function startEditField(fieldId) {
+  fKeyManuallyEdited = true;  // don't let auto-suggest touch the (disabled) field key while editing
   const field = selectedExamDetail.fields.find(f => f.id === fieldId);
   if (!field) return;
 
@@ -390,6 +364,7 @@ function startEditField(fieldId) {
 
 function cancelEdit() {
   editingFieldId = null;
+  fKeyManuallyEdited = false;
   document.getElementById("fLabel").value = "";
   document.getElementById("fKey").value = "";
   document.getElementById("fKey").disabled = false;
@@ -511,23 +486,6 @@ async function deleteExam() {
 function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 init();
-</script>
-</div>
-<script>
-(async function(){
-  try {
-    const res = await fetch('/auth/me');
-    if (!res.ok) return;
-    const me = await res.json();
-    document.getElementById('sfUserName').textContent = me.name || me.email;
-    document.getElementById('sfUserEmail').textContent = me.name ? me.email : '';
-    if (me.is_admin) {
-      document.getElementById('sfAdminDashLink').style.display = 'flex';
-      document.getElementById('sfAdminExamsLink').style.display = 'flex';
-      document.getElementById('sfAdminDivider').style.display = 'block';
-    }
-  } catch (e) { /* nav still works without user info */ }
-})();
 </script>
 </body>
 </html>

@@ -67,11 +67,7 @@ class ExamOut(BaseModel):
 class ExamFieldCreate(BaseModel):
     display_label: str = Field(..., min_length=1, max_length=255)
     field_key: str = Field(..., min_length=1, max_length=128)
-    # Exactly one of these two should be provided:
-    #   source_profile_key -> derived from extracted document data
-    #   default_value       -> fixed constant (e.g. "ENGLISH", "NO")
-    source_profile_key: Optional[str] = Field(default=None, max_length=128)
-    default_value: Optional[str] = Field(default=None, max_length=500)
+    source_profile_key: str = Field(..., min_length=1, max_length=128)
     transform: str = Field(default="verbatim")
     field_type: str = Field(default="text")
     required: bool = Field(default=False)
@@ -81,7 +77,6 @@ class ExamFieldCreate(BaseModel):
 class ExamFieldUpdate(BaseModel):
     display_label: Optional[str] = None
     source_profile_key: Optional[str] = None
-    default_value: Optional[str] = None
     transform: Optional[str] = None
     field_type: Optional[str] = None
     required: Optional[bool] = None
@@ -92,8 +87,7 @@ class ExamFieldOut(BaseModel):
     id: int
     display_label: str
     field_key: str
-    source_profile_key: Optional[str]
-    default_value: Optional[str]
+    source_profile_key: str
     transform: str
     field_type: str
     required: bool
@@ -146,16 +140,20 @@ class ExamDetailOut(BaseModel):
 # Mirrors backend/app/schemas/profile.py's CustomerProfile fields.
 PROFILE_KEYS = [
     "name", "father_name", "mother_name", "gender", "dob", "nationality",
+    "given_name", "surname", "place_of_birth",
     "aadhaar_number", "pan_number", "passport_number", "doi", "doe",
-    "voter_id", "dl_number",
+    "voter_id", "dl_number", "constituency", "vehicle_classes",
+    "file_number", "id_number", "issuing_authority", "document_title", "date",
     "mobile", "email", "address", "address_line1", "address_line2",
     "address_city", "address_district", "address_state", "address_pincode",
     "ssc_name", "ssc_roll", "ssc_school", "ssc_board", "ssc_year",
-    "ssc_percentage", "ssc_marks_identification",
+    "ssc_percentage", "ssc_identification_mark_1", "ssc_identification_mark_2",
     "inter_name", "inter_roll", "inter_college", "inter_board", "inter_year",
     "inter_percentage", "inter_group", "inter_marks_identification",
     "degree_name", "degree_branch", "degree_university", "degree_college",
     "degree_roll", "degree_year", "degree_percentage", "degree_grade",
     "degree_marks_identification",
-    "account_number", "ifsc", "bank_name",
+    "account_number", "ifsc", "bank_name", "account_holder", "account_type", "branch",
+    "employee_name", "employee_id", "designation", "department", "company",
+    "month_year", "basic_salary", "gross_salary", "net_salary", "pf_number",
 ]

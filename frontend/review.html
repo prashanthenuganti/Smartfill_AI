@@ -457,6 +457,21 @@ function fmtDate(v){
   if(parseInt(mo,10)>12){var t=mo;mo=d;d=t;}
   return d+"/"+mo+"/"+y;
 }
+// Separate from fmtDate() above — that one is also used for the universal
+// Personal Details section's display and stays slash-formatted. This one
+// is specifically for exam field transforms named "date_ddmmyyyy" /
+// "date_mmddyyyy", whose names/admin-UI descriptions always said hyphens
+// (e.g. "DD-MM-YYYY") — the transform implementation was actually
+// producing slashes, a real bug, not a design choice. Government forms
+// asking for "DD-MM-YYYY" mean hyphens literally, not DD/MM/YYYY.
+function fmtDateHyphen(v, order){
+  if(!v)return v;
+  var m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m)return v;
+  var y=m[1],mo=m[2],d=m[3];
+  if(parseInt(mo,10)>12){var t=mo;mo=d;d=t;}
+  return order==="mdy" ? (mo+"-"+d+"-"+y) : (d+"-"+mo+"-"+y);
+}
 function parseFmtDate(s){
   var m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   return m?m[3]+"-"+m[2]+"-"+m[1]:s;
@@ -562,11 +577,9 @@ function applyTransform(transform, rawVal){
     case "titlecase":
       return fmtTitleCase(rawVal);
     case "date_ddmmyyyy":
-      return fmtDate(rawVal); // existing helper: YYYY-MM-DD -> DD/MM/YYYY
-    case "date_mmddyyyy": {
-      var m=rawVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      return m?m[2]+"/"+m[3]+"/"+m[1]:rawVal;
-    }
+      return fmtDateHyphen(rawVal, "dmy"); // -> DD-MM-YYYY (hyphens, matching the name — was incorrectly producing slashes before)
+    case "date_mmddyyyy":
+      return fmtDateHyphen(rawVal, "mdy"); // -> MM-DD-YYYY (hyphens, matching the name — was incorrectly producing slashes before)
     case "date_yyyymmdd":
       return rawVal; // already the raw stored format
     case "verbatim":
