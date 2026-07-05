@@ -67,7 +67,11 @@ class ExamOut(BaseModel):
 class ExamFieldCreate(BaseModel):
     display_label: str = Field(..., min_length=1, max_length=255)
     field_key: str = Field(..., min_length=1, max_length=128)
-    source_profile_key: str = Field(..., min_length=1, max_length=128)
+    # Exactly one of these two should be provided:
+    #   source_profile_key -> derived from extracted document data
+    #   default_value       -> fixed constant (e.g. "ENGLISH", "NO")
+    source_profile_key: Optional[str] = Field(default=None, max_length=128)
+    default_value: Optional[str] = Field(default=None, max_length=500)
     transform: str = Field(default="verbatim")
     field_type: str = Field(default="text")
     required: bool = Field(default=False)
@@ -77,6 +81,7 @@ class ExamFieldCreate(BaseModel):
 class ExamFieldUpdate(BaseModel):
     display_label: Optional[str] = None
     source_profile_key: Optional[str] = None
+    default_value: Optional[str] = None
     transform: Optional[str] = None
     field_type: Optional[str] = None
     required: Optional[bool] = None
@@ -87,7 +92,8 @@ class ExamFieldOut(BaseModel):
     id: int
     display_label: str
     field_key: str
-    source_profile_key: str
+    source_profile_key: Optional[str]
+    default_value: Optional[str]
     transform: str
     field_type: str
     required: bool
