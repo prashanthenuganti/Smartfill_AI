@@ -97,54 +97,39 @@ async def health_check() -> dict:
 
 
 # ── Session profile storage ───────────────────────────────────────────────────
-# Per-operator session store, keyed by the logged-in operator's email —
-# replaces the previous single global dict, which was a real correctness
-# bug: with one shared slot, Operator A's customer data could be
-# silently overwritten by or served to Operator B the moment two
-# operators used the app at the same time. Each operator now only ever
-# sees their own in-progress customer profile.
-#
-# Still in-memory (not Redis/a DB table) — fine for a single-process
-# pilot deployment, but note two real limits: (1) restarting the server
-# clears every operator's in-progress session, and (2) this won't work
-# correctly if you ever run more than one server process/worker, since
-# each process would have its own separate dict. Both are acceptable
-# for now; revisit before a larger multi-instance deployment.
-_sessions: dict[str, dict] = {}
+# Simple in-memory store — one active session at a time per server.
+# Production: replace with Redis or database.
+
+_active_session: dict = {}   # stores the confirmed customer profile
 
 
 @router.post("/api/v1/save-session")
-async def save_session(request: Request, email: str = Depends(require_login)) -> JSONResponse:
+async def save_session(request: Request, _email: str = Depends(require_login)) -> JSONResponse:
     """Called by review page when operator clicks 'Use This Data'."""
+    global _active_session
     body = await request.json()
     profile = body.get("profile", {})
     if not profile:
         return JSONResponse({"ok": False, "error": "Empty profile"}, status_code=400)
-    _sessions[email] = profile
+    _active_session = profile
     field_count = sum(1 for v in profile.values() if v and isinstance(v, str))
-    logger.info("Session saved | operator=%s | fields=%d", email, field_count)
+    logger.info("Session saved | fields=%d", field_count)
     return JSONResponse({"ok": True, "fields": field_count})
 
 
 @router.get("/api/v1/get-session")
-async def get_session(email: str = Depends(require_login)) -> JSONResponse:
-    """
-    Called by the Chrome Extension popup to get the current operator's
-    profile. Requires login (via credentials: 'include' on the
-    extension's fetch call) specifically so it can look up THIS
-    operator's session, not just whatever the last person to use the
-    app saved.
-    """
-    profile = _sessions.get(email)
-    if not profile:
+async def get_session() -> JSONResponse:
+    """Called by Chrome Extension popup to get the current profile."""
+    if not _active_session:
         return JSONResponse({"ok": False, "profile": None})
-    return JSONResponse({"ok": True, "profile": profile})
+    return JSONResponse({"ok": True, "profile": _active_session})
 
 
 @router.delete("/api/v1/clear-session")
-async def clear_session(email: str = Depends(require_login)) -> JSONResponse:
-    """Clear the current operator's active session only — not everyone's."""
-    _sessions.pop(email, None)
+async def clear_session() -> JSONResponse:
+    """Clear the active session."""
+    global _active_session
+    _active_session = {}
     return JSONResponse({"ok": True})
 
 
@@ -368,10 +353,19 @@ async def map_fields(request: Request) -> JSONResponse:
     # SSC memos are now split into two numbered marks (ssc_identification_mark_1/2)
     # since that's how they're actually printed — combine them back into one
     # string here for forms that want a single field.
-    # Prefer the most senior certificate's value (degree > inter > ssc)
-    # since that's usually the most recently issued/most relevant one,
-    # falling back to whichever is actually populated.
-    if not profile.get("marks_identification"):
+    #
+    # Skip this entirely when exam-specific fields are configured for this
+    # session (_exam_field_keys present) — if the operator has an exam set
+    # up, its own fields are the intended source of truth, and adding this
+    # generic synthesized candidate into the same pool only gives the AI
+    # another similarly-named option to wrongly prefer over the exam's
+    # actual configured field (confirmed: this was happening — the AI
+    # matched a real "Visible Identification Marks" field to this generic
+    # combined value instead of the exam's own single-value field, even
+    # though the exam-priority instruction below correctly won for other
+    # fields like DOB and Name in the same request).
+    exam_field_keys = profile.get("_exam_field_keys", [])
+    if not exam_field_keys and not profile.get("marks_identification"):
         ssc_marks = ", ".join(filter(None, [
             profile.get("ssc_identification_mark_1"),
             profile.get("ssc_identification_mark_2"),
@@ -387,6 +381,16 @@ async def map_fields(request: Request) -> JSONResponse:
 
     if not fields:
         return JSONResponse({"mapping": {}, "matched": 0})
+
+    # Exam-specific field keys (see review.html's getFinal()) — these were
+    # deliberately configured and correctly formatted for the exam the
+    # operator selected. Pulled out here so they're (a) excluded from the
+    # normal field listing below, since they're metadata, not a real
+    # profile value, and (b) called out explicitly to the AI so it
+    # doesn't default to a more "obviously named" but wrongly-formatted
+    # generic key for the same real-world data (e.g. picking "dob" over
+    # a correctly-formatted exam-specific date field).
+    exam_field_keys = profile.pop("_exam_field_keys", [])
 
     # Build profile summary for the AI. applicant_photo/applicant_signature
     # hold full base64 image data — never dump that into the prompt, just
@@ -405,6 +409,21 @@ async def map_fields(request: Request) -> JSONResponse:
         profile_lines.append("  applicant_signature: <image attached>")
     profile_summary = "\n".join(profile_lines)
 
+    exam_priority_note = ""
+    if exam_field_keys:
+        exam_priority_note = (
+            "\n\nIMPORTANT — the following profile keys were specifically "
+            "configured and formatted for the exam/application the operator "
+            "selected: " + ", ".join(exam_field_keys) + ". "
+            "If a form field could plausibly match one of these keys OR a "
+            "more generic-looking key for the same real-world data (e.g. a "
+            "raw 'dob' vs one of the keys listed here that represents the "
+            "same date but formatted for this specific exam), ALWAYS prefer "
+            "the key listed here — it was deliberately configured to be "
+            "correct for this exact form, even if its name looks less "
+            "standard than a generic alternative."
+        )
+
     # Build field list for the AI
     field_lines = [
         f"  [{i}] id={f['id']!r} label={f['label']!r} type={f.get('type','text')} name={f.get('name','')!r}"
@@ -415,7 +434,7 @@ async def map_fields(request: Request) -> JSONResponse:
     prompt = f"""You are mapping HTML form fields to customer profile data for Indian government application forms.
 
 Customer Profile (only these keys exist):
-{profile_summary}
+{profile_summary}{exam_priority_note}
 
 Form Fields Found on Page:
 {field_list}

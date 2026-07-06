@@ -437,10 +437,20 @@ function getFinal(){
   // should prefer when filling an exam-specific portal (e.g. "first_name" /
   // "last_name" instead of just "name"), without discarding the universal
   // fields underneath for any exam field that isn't configured.
+  var examKeysUsed=[];
   examFields.forEach(function(f){
     var v=getExamVal(f);
-    if(v)r[f.field_key]=v;
+    if(v){r[f.field_key]=v;examKeysUsed.push(f.field_key);}
   });
+  // Explicitly tell the extension's AI matching which keys were
+  // deliberately configured for this exam — without this, a field like
+  // "dob" (raw, e.g. "1994-06-20") and an exam-specific field like "db"
+  // (correctly formatted, e.g. "20-06-1994") look like equally plausible
+  // candidates for the same real-world form field, and the AI has no way
+  // to know one is the intentionally-formatted choice. This is metadata
+  // for the backend/extension, not a real profile field — map-fields
+  // strips it out before building its own field listing.
+  if(examKeysUsed.length)r["_exam_field_keys"]=examKeysUsed;
   return r;
 }
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
