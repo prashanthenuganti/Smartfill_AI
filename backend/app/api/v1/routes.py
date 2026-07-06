@@ -2,6 +2,8 @@
 api/v1/routes.py — Milestone 2
 """
 from __future__ import annotations
+import difflib
+import re
 import time
 from pathlib import Path
 from typing import Annotated, Optional
@@ -13,6 +15,7 @@ from backend.app.core.exceptions import (
     CorruptedFileError, FileTooLargeError, UnsupportedFileTypeError,
 )
 from backend.app.core.auth import require_login, redirect_if_not_logged_in
+from backend.app.core.validators import validate_mobile, validate_email
 from backend.app.core.logging import get_logger
 from backend.app.schemas.documents import (
     DOCUMENT_LABELS, MILESTONE_2_TYPES, DocumentType, UploadedFile,
@@ -97,39 +100,54 @@ async def health_check() -> dict:
 
 
 # ── Session profile storage ───────────────────────────────────────────────────
-# Simple in-memory store — one active session at a time per server.
-# Production: replace with Redis or database.
-
-_active_session: dict = {}   # stores the confirmed customer profile
+# Per-operator session store, keyed by the logged-in operator's email —
+# replaces the previous single global dict, which was a real correctness
+# bug: with one shared slot, Operator A's customer data could be
+# silently overwritten by or served to Operator B the moment two
+# operators used the app at the same time. Each operator now only ever
+# sees their own in-progress customer profile.
+#
+# Still in-memory (not Redis/a DB table) — fine for a single-process
+# pilot deployment, but note two real limits: (1) restarting the server
+# clears every operator's in-progress session, and (2) this won't work
+# correctly if you ever run more than one server process/worker, since
+# each process would have its own separate dict. Both are acceptable
+# for now; revisit before a larger multi-instance deployment.
+_sessions: dict[str, dict] = {}
 
 
 @router.post("/api/v1/save-session")
-async def save_session(request: Request, _email: str = Depends(require_login)) -> JSONResponse:
+async def save_session(request: Request, email: str = Depends(require_login)) -> JSONResponse:
     """Called by review page when operator clicks 'Use This Data'."""
-    global _active_session
     body = await request.json()
     profile = body.get("profile", {})
     if not profile:
         return JSONResponse({"ok": False, "error": "Empty profile"}, status_code=400)
-    _active_session = profile
+    _sessions[email] = profile
     field_count = sum(1 for v in profile.values() if v and isinstance(v, str))
-    logger.info("Session saved | fields=%d", field_count)
+    logger.info("Session saved | operator=%s | fields=%d", email, field_count)
     return JSONResponse({"ok": True, "fields": field_count})
 
 
 @router.get("/api/v1/get-session")
-async def get_session() -> JSONResponse:
-    """Called by Chrome Extension popup to get the current profile."""
-    if not _active_session:
+async def get_session(email: str = Depends(require_login)) -> JSONResponse:
+    """
+    Called by the Chrome Extension popup to get the current operator's
+    profile. Requires login (via credentials: 'include' on the
+    extension's fetch call) specifically so it can look up THIS
+    operator's session, not just whatever the last person to use the
+    app saved.
+    """
+    profile = _sessions.get(email)
+    if not profile:
         return JSONResponse({"ok": False, "profile": None})
-    return JSONResponse({"ok": True, "profile": _active_session})
+    return JSONResponse({"ok": True, "profile": profile})
 
 
 @router.delete("/api/v1/clear-session")
-async def clear_session() -> JSONResponse:
-    """Clear the active session."""
-    global _active_session
-    _active_session = {}
+async def clear_session(email: str = Depends(require_login)) -> JSONResponse:
+    """Clear the current operator's active session only — not everyone's."""
+    _sessions.pop(email, None)
     return JSONResponse({"ok": True})
 
 
@@ -167,6 +185,20 @@ async def process_session(
     # Allow session with no files if manual inputs provided
     if not files and not manual_mobile and not manual_email:
         return _error(400, ErrorCode.NO_FILE_PROVIDED, "Provide at least one document or contact detail.")
+
+    # Validate manually-typed contact details BEFORE they ever reach the
+    # profile. These are operator-typed (not AI-extracted), so unlike
+    # extracted fields — where we flag-for-review rather than block —
+    # a hard reject here is appropriate: it's a same-turn, fixable typo,
+    # not something requiring the operator to re-examine a document.
+    if manual_mobile and manual_mobile.strip():
+        is_valid, reason = validate_mobile(manual_mobile.strip())
+        if not is_valid:
+            return _error(422, "INVALID_MOBILE", reason)
+    if manual_email and manual_email.strip():
+        is_valid, reason = validate_email(manual_email.strip())
+        if not is_valid:
+            return _error(422, "INVALID_EMAIL", reason)
 
     # Parse declared types
     type_list = [t.strip() for t in document_types.split(",") if t.strip()]
@@ -328,6 +360,68 @@ async def process_documents(
 
 # ── AI Field Mapping endpoint ─────────────────────────────────────────────────
 
+def _normalize_label(s: str) -> str:
+    """Lowercase, strip punctuation/numbering, collapse whitespace — so
+    '5. Date Of Birth (DD-MM-YYYY)' and 'Date Of Birth (DD-MM-YYYY)'
+    compare as near-identical despite the leading question number."""
+    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+
+# Confident-match threshold. Tested against real cases before choosing this:
+# genuine matches (admin's configured label vs. the real DOM field's label,
+# differing only by a leading "5. " question number) scored 0.96; a
+# deliberately unrelated field scored 0.29 — a wide, safe margin.
+_LABEL_MATCH_THRESHOLD = 0.85
+
+
+def _match_exam_fields_directly(fields: list, exam_fields_meta: list) -> dict:
+    """
+    Deterministically match real DOM form fields to exam-configured fields
+    by comparing their labels directly — BEFORE any AI involvement.
+
+    This exists because relying on the AI to choose the right profile key
+    among several plausible, similarly-named candidates (e.g. a raw 'dob'
+    vs. an exam-specific correctly-formatted date field) proved fragile in
+    practice — fixing it for one field repeatedly left another exposed to
+    the same ambiguity. Matching directly against what the admin actually
+    configured for this exam removes that ambiguity entirely for any field
+    it confidently matches: whatever is shown/configured on the review
+    page for this exam is what gets used, deterministically, not an AI's
+    best guess.
+
+    Returns a mapping dict for whatever it confidently matched. Fields
+    that don't match anything here are left for the AI fallback that
+    follows, unaffected by this pass.
+    """
+    mapping: dict = {}
+    matched_field_ids: set = set()
+
+    for ef in exam_fields_meta:
+        label = ef.get("display_label", "")
+        field_key = ef.get("field_key", "")
+        if not label or not field_key:
+            continue
+        norm_target = _normalize_label(label)
+
+        best_field = None
+        best_score = 0.0
+        for f in fields:
+            if f["id"] in matched_field_ids:
+                continue
+            score = difflib.SequenceMatcher(
+                None, norm_target, _normalize_label(f.get("label", ""))
+            ).ratio()
+            if score > best_score:
+                best_score = score
+                best_field = f
+
+        if best_field and best_score >= _LABEL_MATCH_THRESHOLD:
+            mapping[best_field["id"]] = field_key
+            matched_field_ids.add(best_field["id"])
+
+    return mapping
+
+
 @router.post("/api/v1/map-fields", summary="Map page form fields to customer profile")
 async def map_fields(request: Request) -> JSONResponse:
     request = await request.json()
@@ -346,6 +440,21 @@ async def map_fields(request: Request) -> JSONResponse:
     profile: dict = request.get("profile", {})
     fields: list = request.get("fields", [])
 
+    # Deterministic pass FIRST — match real DOM fields against the admin's
+    # exam configuration by label similarity, before any AI involvement.
+    # See _match_exam_fields_directly for why: this is what actually
+    # guarantees "whatever is shown/configured for this exam is what gets
+    # used" rather than depending on an AI's judgment call every time.
+    exam_fields_meta = profile.get("_exam_fields_meta", [])
+    direct_mapping = (
+        _match_exam_fields_directly(fields, exam_fields_meta) if exam_fields_meta else {}
+    )
+    if direct_mapping:
+        logger.info("Direct exam-field matches | count=%d | fields=%s",
+                    len(direct_mapping), list(direct_mapping.values()))
+        directly_matched_ids = set(direct_mapping.keys())
+        fields = [f for f in fields if f["id"] not in directly_matched_ids]
+
     # Synthesize a generic 'marks_identification' key for forms that have
     # ONE generic "Identification Marks" / "Visible Identification Marks"
     # field rather than separate SSC/Inter/Degree-specific ones (the common
@@ -359,11 +468,7 @@ async def map_fields(request: Request) -> JSONResponse:
     # up, its own fields are the intended source of truth, and adding this
     # generic synthesized candidate into the same pool only gives the AI
     # another similarly-named option to wrongly prefer over the exam's
-    # actual configured field (confirmed: this was happening — the AI
-    # matched a real "Visible Identification Marks" field to this generic
-    # combined value instead of the exam's own single-value field, even
-    # though the exam-priority instruction below correctly won for other
-    # fields like DOB and Name in the same request).
+    # actual configured field.
     exam_field_keys = profile.get("_exam_field_keys", [])
     if not exam_field_keys and not profile.get("marks_identification"):
         ssc_marks = ", ".join(filter(None, [
@@ -380,16 +485,16 @@ async def map_fields(request: Request) -> JSONResponse:
                 break
 
     if not fields:
-        return JSONResponse({"mapping": {}, "matched": 0})
+        # Nothing left for the AI, but we may still have direct matches
+        return JSONResponse({"mapping": direct_mapping, "matched": len(direct_mapping)})
 
-    # Exam-specific field keys (see review.html's getFinal()) — these were
-    # deliberately configured and correctly formatted for the exam the
-    # operator selected. Pulled out here so they're (a) excluded from the
-    # normal field listing below, since they're metadata, not a real
-    # profile value, and (b) called out explicitly to the AI so it
-    # doesn't default to a more "obviously named" but wrongly-formatted
-    # generic key for the same real-world data (e.g. picking "dob" over
-    # a correctly-formatted exam-specific date field).
+    # Exam-specific field keys/metadata (see review.html's getFinal()) —
+    # pulled out here so they don't leak into the profile listing below as
+    # fake "fields" (they're metadata, not real profile values), and so
+    # the ones NOT already handled by the direct-match pass above can
+    # still get an explicit priority mention in the prompt for the AI
+    # fallback.
+    profile.pop("_exam_fields_meta", None)
     exam_field_keys = profile.pop("_exam_field_keys", [])
 
     # Build profile summary for the AI. applicant_photo/applicant_signature
@@ -416,11 +521,9 @@ async def map_fields(request: Request) -> JSONResponse:
             "configured and formatted for the exam/application the operator "
             "selected: " + ", ".join(exam_field_keys) + ". "
             "If a form field could plausibly match one of these keys OR a "
-            "more generic-looking key for the same real-world data (e.g. a "
-            "raw 'dob' vs one of the keys listed here that represents the "
-            "same date but formatted for this specific exam), ALWAYS prefer "
-            "the key listed here — it was deliberately configured to be "
-            "correct for this exact form, even if its name looks less "
+            "more generic-looking key for the same real-world data, ALWAYS "
+            "prefer the key listed here — it was deliberately configured to "
+            "be correct for this exact form, even if its name looks less "
             "standard than a generic alternative."
         )
 
@@ -507,17 +610,22 @@ JSON now:"""
             k: v for k, v in mapping.items()
             if v and profile.get(v)
         }
+        # Merge in the deterministic exam-field matches from before the AI
+        # call — these take priority and were already removed from the
+        # `fields` list the AI saw, so there's no overlap/conflict here.
+        mapping.update(direct_mapping)
 
         logger.info(
-            "Field mapping | page_fields=%d | matched=%d",
-            len(fields), len(mapping),
+            "Field mapping | page_fields=%d | matched=%d | direct=%d",
+            len(fields), len(mapping), len(direct_mapping),
         )
         return JSONResponse({"mapping": mapping, "matched": len(mapping)})
 
     except Exception as exc:
         logger.error("Field mapping error | %s", exc)
-        # Return keyword-based fallback
+        # Return keyword-based fallback, still including direct matches
         mapping = _keyword_map_fields(fields, profile)
+        mapping.update(direct_mapping)
         return JSONResponse({"mapping": mapping, "matched": len(mapping)})
 
 

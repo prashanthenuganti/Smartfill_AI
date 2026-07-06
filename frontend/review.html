@@ -438,10 +438,22 @@ function getFinal(){
   // "last_name" instead of just "name"), without discarding the universal
   // fields underneath for any exam field that isn't configured.
   var examKeysUsed=[];
+  var examFieldsMeta=[];
   examFields.forEach(function(f){
     var v=getExamVal(f);
-    if(v){r[f.field_key]=v;examKeysUsed.push(f.field_key);}
+    if(v){
+      r[f.field_key]=v;
+      examKeysUsed.push(f.field_key);
+      // display_label travels with the value specifically so the backend
+      // can match it DIRECTLY against the real form field's own label —
+      // deterministic matching, not asking an AI to guess between several
+      // similarly-named candidates for the same real-world data. Whatever
+      // is configured/shown here for this exam is what should get used,
+      // automatically, without depending on AI judgment calls.
+      examFieldsMeta.push({field_key:f.field_key, display_label:f.display_label, value:v});
+    }
   });
+  if(examFieldsMeta.length)r["_exam_fields_meta"]=examFieldsMeta;
   // Explicitly tell the extension's AI matching which keys were
   // deliberately configured for this exam — without this, a field like
   // "dob" (raw, e.g. "1994-06-20") and an exam-specific field like "db"
