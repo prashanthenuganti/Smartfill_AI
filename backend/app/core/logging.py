@@ -10,41 +10,54 @@ Rules enforced here:
 """
 
 import logging
+import re
 import sys
 from typing import Any
 
 from backend.app.core.config import get_settings
 
 # ── PII scrubber ──────────────────────────────────────────────────────────────
+#
+# This matches PII by VALUE SHAPE (regex patterns for what an actual
+# Aadhaar/mobile/PAN/email/VID number looks like), not by field NAME.
+#
+# An earlier version matched on field names instead (blocking any message
+# containing the word "aadhaar", "mobile", "dob", etc.) — that had to be
+# disabled because it was blocking completely benign messages too, e.g.
+# "type=aadhaar" or "document_type=aadhaar" (just naming which document
+# type was being processed, no actual PII value present) — hiding useful
+# debugging info along with whatever PII it was meant to catch. Matching
+# the actual value shape instead means only the real sensitive substring
+# gets redacted; the rest of the message stays intact and useful.
 
-_PII_PLACEHOLDERS: dict[str, str] = {
-    "aadhaar": "****-****-****",
-    "pan": "**********",
-    "mobile": "**********",
-    "email": "****@****.***",
-}
+# Order matters: longer/more-specific digit patterns are checked before
+# shorter ones, so e.g. a 12-digit Aadhaar number's own digits can't be
+# partially re-matched by the shorter mobile-number pattern afterward.
+_VID_RE = re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")       # 16-digit VID
+_AADHAAR_RE = re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")             # 12-digit Aadhaar
+_MOBILE_RE = re.compile(r"\b[6-9]\d{9}\b")                               # 10-digit Indian mobile
+_PAN_RE = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")                          # PAN: AAAAA0000A
+_EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 
 
 class PIIFilter(logging.Filter):
     """
-    Logging filter that blocks records containing raw PII field names
-    paired with actual values.  This is a safety net — code should not
-    log PII in the first place.
+    Redacts actual PII values found in a log message, based on their
+    shape — never blocks or replaces an entire message just because it
+    mentions a sensitive-sounding field name.
     """
 
-    _SENSITIVE_KEYS = frozenset(
-        ["aadhaar", "pan_number", "pan", "mobile", "phone", "email", "dob"]
-    )
-
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
-        # Allow the record through but scrub obvious patterns
         msg = str(record.getMessage())
-        for key in self._SENSITIVE_KEYS:
-            if key in msg.lower():
-                # Replace the entire message with a safe version
-                record.msg = "[REDACTED — potential PII in log message]"
-                record.args = ()
-                break
+        redacted = _VID_RE.sub("[VID-REDACTED]", msg)
+        redacted = _AADHAAR_RE.sub("[AADHAAR-REDACTED]", redacted)
+        redacted = _MOBILE_RE.sub("[MOBILE-REDACTED]", redacted)
+        redacted = _PAN_RE.sub("[PAN-REDACTED]", redacted)
+        redacted = _EMAIL_RE.sub("[EMAIL-REDACTED]", redacted)
+
+        if redacted != msg:
+            record.msg = redacted
+            record.args = ()
         return True
 
 
@@ -64,7 +77,7 @@ def configure_logging() -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT))
-    #handler.addFilter(PIIFilter())
+    handler.addFilter(PIIFilter())
 
     root = logging.getLogger()
     root.setLevel(level)
