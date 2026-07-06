@@ -71,6 +71,10 @@
     .inp.invalid:focus{box-shadow:0 0 0 3px rgba(220,38,38,0.1);}
     .inp-error{font-size:11px;color:#dc2626;margin-top:3px;min-height:14px;}
     .inp::placeholder{color:var(--text-3);}
+    /* Divider between the Contact Details and Photo/Signature parts of the
+       now-unified panel below — replaces what used to be a visible gap
+       between three separate bordered boxes. */
+    .details-divider{height:1px;background:var(--border);margin:14px 0;}
 
     /* ── Exam / application selector ─────────────────────────────────── */
     .exam-card{background:var(--surface);border:1.5px solid var(--border);
@@ -84,9 +88,12 @@
     .exam-hint-global{font-size:11px;color:var(--text-3);margin-top:7px;}
 
     /* ── Applicant assets (photo / signature) ───────────────────────── */
+    /* No longer its own bordered card — nested inside the same unified
+       panel as Contact Details, separated only by .details-divider above,
+       so the whole "additional info" area reads as one cohesive section
+       instead of three stacked boxes. */
     .assets-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-    .asset-card{background:var(--surface);border:1.5px solid var(--border);
-      border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);}
+    .asset-card{padding:0;}
     .asset-card-head{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
     .asset-icon{font-size:15px;}
     .asset-title{font-size:12px;font-weight:700;color:var(--text-2);flex:1;}
@@ -266,7 +273,8 @@
       <div class="drop-limit">Up to 10 files · Max 10 MB each</div>
     </div>
 
-    <!-- Contact details -->
+    <!-- Contact details + Applicant photo/signature — unified into one
+         panel instead of three separate stacked boxes -->
     <div class="contact-section">
       <div class="contact-title">Contact Details (optional)</div>
       <div class="contact-row">
@@ -281,25 +289,27 @@
           <div class="inp-error" id="err-email"></div>
         </div>
       </div>
-    </div>
 
-    <!-- Applicant photo + signature (optional) -->
-    <div class="assets-row">
-      <div class="asset-card" id="photoCard">
-        <div class="asset-card-head">
-          <span class="asset-title">Applicant Photo</span>
-          <span class="asset-optional">Optional</span>
+      <div class="details-divider"></div>
+
+      <div class="contact-title">Photo &amp; Signature (optional)</div>
+      <div class="assets-row">
+        <div class="asset-card" id="photoCard">
+          <div class="asset-card-head">
+            <span class="asset-title">Applicant Photo</span>
+            <span class="asset-optional">Optional</span>
+          </div>
+          <div class="asset-hint" id="photoHint"></div>
+          <div id="photoBody"></div>
         </div>
-        <div class="asset-hint" id="photoHint"></div>
-        <div id="photoBody"></div>
-      </div>
-      <div class="asset-card" id="signatureCard">
-        <div class="asset-card-head">
-          <span class="asset-title">Signature</span>
-          <span class="asset-optional">Optional</span>
+        <div class="asset-card" id="signatureCard">
+          <div class="asset-card-head">
+            <span class="asset-title">Signature</span>
+            <span class="asset-optional">Optional</span>
+          </div>
+          <div class="asset-hint" id="signatureHint"></div>
+          <div id="signatureBody"></div>
         </div>
-        <div class="asset-hint" id="signatureHint"></div>
-        <div id="signatureBody"></div>
       </div>
     </div>
 

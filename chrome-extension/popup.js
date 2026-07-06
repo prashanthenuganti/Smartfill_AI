@@ -14,31 +14,7 @@
 
 "use strict";
 
-// Auto-detects which backend to use — tries your local dev server
-// first (fast timeout), falls back to the deployed Railway backend if
-// nothing's running locally. This means you never have to remember to
-// manually flip this between local testing and normal day-to-day use —
-// whichever one is actually reachable gets used automatically.
-const LOCAL_API = "http://127.0.0.1:8000";
-const RAILWAY_API = "https://web-production-a52e0.up.railway.app";
-let API = RAILWAY_API;  // default until resolveApiBase() runs
-
-async function resolveApiBase() {
-  try {
-    const r = await fetch(`${LOCAL_API}/api/v1/health`, {
-      signal: AbortSignal.timeout(1200),
-    });
-    if (r.ok) {
-      API = LOCAL_API;
-      console.log("[SmartFill AI] Using local backend:", LOCAL_API);
-      return;
-    }
-  } catch {
-    // local backend not reachable — fall through to Railway
-  }
-  API = RAILWAY_API;
-  console.log("[SmartFill AI] Using Railway backend:", RAILWAY_API);
-}
+const API = "https://web-production-a52e0.up.railway.app";
 
 const PROFILE_DISPLAY = [
   { key: "name",            label: "Name" },
@@ -68,7 +44,6 @@ let state = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  await resolveApiBase();
   await checkHealth();
   bindEvents();
   await loadProfile();
@@ -174,7 +149,14 @@ function renderProfileCard() {
   const p = state.profile;
   if (!p) return;
 
-  document.getElementById("profileName").textContent = p.name || "Customer";
+  // "name" only gets set when a document that populates it (Aadhaar, PAN,
+  // etc.) was uploaded. A certificate-only upload (SSC/Inter/Degree) sets
+  // its own document-specific name field instead — check those too before
+  // falling back to a generic placeholder, so a real name shows whenever
+  // one is actually available anywhere in the profile.
+  const displayName = p.name || p.ssc_name || p.inter_name || p.degree_name
+    || p.employee_name || p.account_holder || "Customer";
+  document.getElementById("profileName").textContent = displayName;
 
   // Profile from get-session is a flat dict of plain strings
   // (result of getFinalProfile() from review.html)
@@ -182,7 +164,15 @@ function renderProfileCard() {
     const v = p[f.key];
     return v && typeof v === "string" && v.trim().length > 0;
   });
-  document.getElementById("profileMeta").textContent = `${populated.length} fields ready`;
+  // This counts only the curated "quick glance" identity fields shown as
+  // pills below (name, DOB, Aadhaar, etc.) — NOT the full profile, which
+  // may have many more fields (exam-specific, certificate details, etc.)
+  // that get used for autofill but aren't worth listing individually
+  // here. Labeled "Profile Loaded" rather than "X fields ready" so it
+  // doesn't read as a total-field-count that invites comparison against
+  // the review page's actual (usually larger) count.
+  document.getElementById("profileMeta").textContent =
+    populated.length > 0 ? "Profile Loaded" : "Profile Loaded (limited details)";
 
   const container = document.getElementById("profileFields");
   container.innerHTML = populated.map(({ key, label }) => {
