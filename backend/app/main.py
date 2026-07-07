@@ -1,7 +1,7 @@
 """
 app/main.py
 -----------
-FastAPI application entry point for MitraFill.
+FastAPI application entry point for Mitra Fill.
 
 Responsibilities:
   - Create the FastAPI app instance
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     logger.info("=" * 60)
-    logger.info("MitraFill starting up")
+    logger.info("Mitra Fill starting up")
     logger.info("  environment : %s", settings.app_env)
     logger.info("  host        : %s:%d", settings.app_host, settings.app_port)
     logger.info("  max_file_mb : %d", settings.max_file_size_mb)
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
     yield  # ← application runs here
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
-    logger.info("MitraFill shutting down gracefully")
+    logger.info("Mitra Fill shutting down gracefully")
 
 
 # ── Application factory ───────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="MitraFill",
+        title="Mitra Fill",
         description=(
             "AI-powered document extraction API for Internet Centers. "
             "Extracts structured data from Aadhaar and PAN cards."

@@ -96,7 +96,7 @@ async def review_page(request: Request):
 
 @router.get("/api/v1/health")
 async def health_check() -> dict:
-    return {"status": "ok", "service": "MitraFill", "version": "2.0.0"}
+    return {"status": "ok", "service": "Mitra Fill", "version": "2.0.0"}
 
 
 # ── Session profile storage ───────────────────────────────────────────────────
