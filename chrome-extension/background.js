@@ -8,7 +8,7 @@
 "use strict";
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("[SmartFill AI] v2.0 installed");
+  console.log("[MitraFill] v2.0 installed");
   chrome.action.setBadgeBackgroundColor({ color: "#6366f1" });
 });
 

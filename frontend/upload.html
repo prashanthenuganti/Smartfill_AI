@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SmartFill AI</title>
+  <title>MitraFill</title>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -224,7 +224,7 @@
 <button class="sf-mobile-toggle" onclick="document.getElementById('sfSidebar').classList.toggle('open')">&#9776;</button>
 <nav class="sf-sidebar" id="sfSidebar">
   <div class="sf-brand">
-    SmartFill <em>AI</em>
+    Mitra<em>Fill</em>
     <div class="status-pill">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusLabel">Checking…</span>
@@ -264,7 +264,7 @@
       <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg"/>
       <span class="drop-icon">📁</span>
       <div class="drop-title">Select or Drop Files</div>
-      <div class="drop-sub">SmartFill AI will automatically detect each document type</div>
+      <div class="drop-sub">MitraFill will automatically detect each document type</div>
       <div class="drop-formats">
         <span class="fmt-badge">JPG</span>
         <span class="fmt-badge">PNG</span>
@@ -393,7 +393,7 @@ async function loadExamList() {
       sel.appendChild(opt);
     });
   } catch (err) {
-    console.warn("[SmartFill] Could not load exam list:", err.message);
+    console.warn("[MitraFill] Could not load exam list:", err.message);
   }
 }
 
@@ -413,7 +413,7 @@ async function loadExamSpecs(code) {
     examSpecCache[code] = entry;
     renderAssetHints();
   } catch (err) {
-    console.warn("[SmartFill] Could not load specs for", code, err.message);
+    console.warn("[MitraFill] Could not load specs for", code, err.message);
   }
 }
 

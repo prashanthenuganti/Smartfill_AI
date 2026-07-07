@@ -1,5 +1,5 @@
 /**
- * content.js — SmartFill AI v3.1
+ * content.js — MitraFill v3.1
  *
  * Portal-aware form scanner and filler.
  * Handles: Angular (UIDAI), React (NSDL, SSC), plain HTML, iframe forms.
@@ -20,7 +20,7 @@
 // guard, the second injection throws "Identifier 'PORTAL' has already been
 // declared" because const/let can't be redeclared in the same page context.
 if (window.__smartfillInjected) {
-  console.log("[SmartFill AI] Already injected — skipping re-execution");
+  console.log("[MitraFill] Already injected — skipping re-execution");
 } else {
   window.__smartfillInjected = true;
 
@@ -288,7 +288,7 @@ async function fillForm(profile, options) {
       }
     } catch (err) {
       failed++;
-      console.warn("[SmartFill] Fill error:", selector, err.message);
+      console.warn("[MitraFill] Fill error:", selector, err.message);
     }
   }
 
@@ -434,7 +434,7 @@ async function fillFileInput(el, dataUrl, profileKey) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return el.files.length > 0;
   } catch (err) {
-    console.warn("[SmartFill] File fill error:", err.message);
+    console.warn("[MitraFill] File fill error:", err.message);
     return false;
   }
 }
@@ -489,18 +489,18 @@ function fillSelect(el, value) {
 async function fillCustomDropdown(triggerEl, value) {
   const targetText = value.toLowerCase().trim();
   const beforeText = clean(triggerEl.textContent);
-  console.log("[SmartFill] fillCustomDropdown start | target:", value, "| trigger text before:", beforeText);
+  console.log("[MitraFill] fillCustomDropdown start | target:", value, "| trigger text before:", beforeText);
 
   // Step 1: open the dropdown (this part has worked reliably — only the
   // option *selection* click has failed)
   openDropdownTrigger(triggerEl);
-  console.log("[SmartFill] Dropdown trigger clicked, waiting for options panel…");
+  console.log("[MitraFill] Dropdown trigger clicked, waiting for options panel…");
 
   const initialOptions = await waitForDropdownOptions(triggerEl, 1500);
-  console.log("[SmartFill] Options found:", initialOptions.map(o => clean(o.textContent)));
+  console.log("[MitraFill] Options found:", initialOptions.map(o => clean(o.textContent)));
 
   if (!initialOptions.length) {
-    console.warn("[SmartFill] Dropdown opened but no options rendered for", triggerEl);
+    console.warn("[MitraFill] Dropdown opened but no options rendered for", triggerEl);
     return false;
   }
 
@@ -514,30 +514,30 @@ async function fillCustomDropdown(triggerEl, value) {
   const match = findMatch(freshOptions);
 
   if (!match) {
-    console.warn("[SmartFill] No matching option found for value:", value, "| available:",
+    console.warn("[MitraFill] No matching option found for value:", value, "| available:",
       initialOptions.map(o => clean(o.textContent)));
     openDropdownTrigger(triggerEl); // close it again
     return false;
   }
 
-  console.log("[SmartFill] Matched option:", clean(match.textContent));
+  console.log("[MitraFill] Matched option:", clean(match.textContent));
 
   // Step 2: try the Angular-internals route first
   const viaAngular = trySelectViaAngular(triggerEl, match, value);
   if (viaAngular) {
-    console.log("[SmartFill] Selected via Angular internals (bypassed click)");
+    console.log("[MitraFill] Selected via Angular internals (bypassed click)");
   } else {
-    console.log("[SmartFill] Angular internals route unavailable, falling back to click simulation");
+    console.log("[MitraFill] Angular internals route unavailable, falling back to click simulation");
     clickOption(match);
   }
 
   await sleep(250);
   const afterText = clean(triggerEl.textContent);
-  console.log("[SmartFill] Trigger text after selection attempt:", afterText);
+  console.log("[MitraFill] Trigger text after selection attempt:", afterText);
 
   const success = afterText !== beforeText && afterText.toLowerCase().includes(targetText);
   if (!success) {
-    console.warn("[SmartFill] Trigger text did not update. before:", beforeText, "| after:", afterText);
+    console.warn("[MitraFill] Trigger text did not update. before:", beforeText, "| after:", afterText);
   }
   return success;
 }
@@ -551,7 +551,7 @@ function trySelectViaAngular(triggerEl, optionEl, value) {
   // window.ng is Angular's global debug API — only present if the app
   // wasn't built with full production optimizations that strip it
   if (typeof window.ng === "undefined") {
-    console.log("[SmartFill] window.ng not available — Angular debug API not exposed");
+    console.log("[MitraFill] window.ng not available — Angular debug API not exposed");
     return false;
   }
 
@@ -568,14 +568,14 @@ function trySelectViaAngular(triggerEl, optionEl, value) {
       ? window.ng.getComponent(triggerEl) || window.ng.getComponent(triggerEl.closest("app-dropdown"))
       : null;
 
-    console.log("[SmartFill] ng.getComponent results | option:", optionComponent, "| trigger:", triggerComponent);
+    console.log("[MitraFill] ng.getComponent results | option:", optionComponent, "| trigger:", triggerComponent);
 
     // Try common method names on the trigger component for setting a value
     if (triggerComponent) {
       const candidateMethods = ["selectOption", "onSelect", "select", "writeValue", "setValue", "onChange"];
       for (const methodName of candidateMethods) {
         if (typeof triggerComponent[methodName] === "function") {
-          console.log("[SmartFill] Calling triggerComponent." + methodName + "(value)");
+          console.log("[MitraFill] Calling triggerComponent." + methodName + "(value)");
           triggerComponent[methodName](value);
           return true;
         }
@@ -585,7 +585,7 @@ function trySelectViaAngular(triggerEl, optionEl, value) {
       const candidateProps = ["selectedValue", "value", "selected"];
       for (const propName of candidateProps) {
         if (propName in triggerComponent) {
-          console.log("[SmartFill] Setting triggerComponent." + propName + " = value");
+          console.log("[MitraFill] Setting triggerComponent." + propName + " = value");
           triggerComponent[propName] = value;
           // Trigger Angular change detection manually since we bypassed
           // its normal event-driven update cycle
@@ -597,10 +597,10 @@ function trySelectViaAngular(triggerEl, optionEl, value) {
       }
     }
 
-    console.log("[SmartFill] No usable method/property found on Angular component");
+    console.log("[MitraFill] No usable method/property found on Angular component");
     return false;
   } catch (err) {
-    console.warn("[SmartFill] trySelectViaAngular failed:", err.message);
+    console.warn("[MitraFill] trySelectViaAngular failed:", err.message);
     return false;
   }
 }
@@ -693,6 +693,6 @@ function flashField(el, type) {
   }, 2500);
 }
 
-console.log("[SmartFill AI] v3.1 loaded | portal:", PORTAL);
+console.log("[MitraFill] v3.1 loaded | portal:", PORTAL);
 
 } // end injection guard

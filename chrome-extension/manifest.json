@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "SmartFill AI",
+  "name": "MitraFill",
   "version": "2.0.0",
   "description": "Upload documents \u2192 extract data \u2192 fill any government form automatically.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "SmartFill AI"
+    "default_title": "MitraFill"
   },
   "permissions": [
     "activeTab",

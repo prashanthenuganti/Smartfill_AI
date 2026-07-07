@@ -449,7 +449,7 @@ async function fillForm() {
   }
 
   try {
-    console.log("[SmartFill DEBUG] state.profile.aadhaar_number at fill time:", state.profile.aadhaar_number);
+    console.log("[MitraFill DEBUG] state.profile.aadhaar_number at fill time:", state.profile.aadhaar_number);
     const resp = await chrome.tabs.sendMessage(tab.id, {
       type: "DO_FILL",
       profile: state.profile,
