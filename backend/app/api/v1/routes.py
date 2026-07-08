@@ -70,6 +70,17 @@ async def login_page():
     return HTMLResponse("<h1>login.html not found</h1>", status_code=404)
 
 
+@router.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+async def privacy_page():
+    # Deliberately public — no login required. Chrome Web Store reviewers,
+    # and anyone considering using the extension, need to be able to read
+    # this without an account.
+    html_path = Path(__file__).parents[4] / "frontend" / "privacy.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>privacy.html not found</h1>", status_code=404)
+
+
 @router.get("/app", response_class=HTMLResponse, include_in_schema=False)
 async def upload_page(request: Request):
     redirect = redirect_if_not_logged_in(request)
