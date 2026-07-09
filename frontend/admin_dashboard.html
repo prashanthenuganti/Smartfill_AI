@@ -159,6 +159,23 @@
       el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="200">${bars}</svg>`;
     }
 
+    // Backend timestamps may arrive naive ("2026-07-05T10:30:00") or
+    // already timezone-aware ("2026-07-05T10:30:00+00:00") depending on
+    // how the database driver serializes them — blindly appending "Z"
+    // breaks the aware case (a string can't have both an explicit
+    // offset AND "Z"), which is exactly what was showing "Invalid Date".
+    // Try parsing as-is first; only append "Z" if that fails and the
+    // string doesn't already carry timezone info.
+    function formatTimestamp(ts) {
+      if (!ts) return "—";
+      let d = new Date(ts);
+      const hasTzInfo = /[Zz]$/.test(ts) || /[+-]\d{2}:?\d{2}$/.test(ts);
+      if (isNaN(d.getTime()) && !hasTzInfo) {
+        d = new Date(ts + "Z");
+      }
+      return isNaN(d.getTime()) ? "—" : d.toLocaleString();
+    }
+
     function renderActivity(events) {
       const el = document.getElementById("activityTable");
       if (!events.length) {
@@ -169,7 +186,7 @@
         <tr>
           <td>${e.email}</td>
           <td><span class="badge ${e.event_type}">${e.event_type}</span></td>
-          <td>${new Date(e.timestamp + "Z").toLocaleString()}</td>
+          <td>${formatTimestamp(e.timestamp)}</td>
         </tr>
       `).join("");
       el.className = "";
