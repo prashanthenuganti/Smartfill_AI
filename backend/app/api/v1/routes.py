@@ -466,6 +466,43 @@ async def map_fields(request: Request) -> JSONResponse:
         directly_matched_ids = set(direct_mapping.keys())
         fields = [f for f in fields if f["id"] not in directly_matched_ids]
 
+    # ── STRICT MODE ───────────────────────────────────────────────────────
+    # When an exam is selected, its configured fields are a CONTRACT: only
+    # those fields get filled, and everything else on the page is left
+    # untouched. The AI fallback below is deliberately NOT reached — a
+    # plausible-but-wrong AI guess on a government form (e.g. filling the
+    # candidate's name into "New Name / Changed Name" when the same form
+    # says name was never changed) is far worse than an empty field the
+    # operator visibly has to complete. An unmatched configured field is
+    # also a useful signal: it means the exam config has a gap or the
+    # operator is on a different page of the form.
+    #
+    # One narrow deterministic exception: photo/signature file inputs.
+    # Exam configs don't cover file uploads as fields, but <input
+    # type="file"> is unambiguous and uploading these is part of the
+    # operator's job — so map them by simple keyword, no AI involved.
+    if exam_fields_meta:
+        exam_matched = len(direct_mapping)
+        for f in fields:
+            if f.get("type") != "file":
+                continue
+            hint = ((f.get("label") or "") + " " + (f.get("name") or "")).lower()
+            if profile.get("applicant_signature") and "sign" in hint:
+                direct_mapping[f["id"]] = "applicant_signature"
+            elif profile.get("applicant_photo"):
+                direct_mapping[f["id"]] = "applicant_photo"
+        logger.info(
+            "Strict exam mode | exam fields matched=%d/%d | file inputs mapped=%d | AI fallback skipped",
+            exam_matched, len(exam_fields_meta), len(direct_mapping) - exam_matched,
+        )
+        return JSONResponse({
+            "mapping": direct_mapping,
+            "matched": len(direct_mapping),
+            "strict": True,
+            "exam_total": len(exam_fields_meta),
+            "exam_matched": exam_matched,
+        })
+
     # Synthesize a generic 'marks_identification' key for forms that have
     # ONE generic "Identification Marks" / "Visible Identification Marks"
     # field rather than separate SSC/Inter/Degree-specific ones (the common

@@ -290,17 +290,41 @@ async function scanAndMap() {
     state.mapping = mapData.mapping || {};
 
     const matchCount = Object.keys(state.mapping).length;
-    setPageStatus(
-      matchCount > 0 ? "✅" : "⚠️",
-      matchCount > 0
-        ? `${matchCount} field${matchCount !== 1 ? "s" : ""} ready to fill`
-        : "No matching fields found"
-    );
+    if (mapData.strict) {
+      // Strict exam mode — only configured exam fields (plus photo/signature
+      // uploads) are filled; the count tells the operator how much of the
+      // exam config exists on THIS page (multi-page forms won't have all).
+      setPageStatus(
+        matchCount > 0 ? "✅" : "⚠️",
+        `${mapData.exam_matched} of ${mapData.exam_total} exam fields found on this page`
+      );
+    } else {
+      setPageStatus(
+        matchCount > 0 ? "✅" : "⚠️",
+        matchCount > 0
+          ? `${matchCount} field${matchCount !== 1 ? "s" : ""} ready to fill`
+          : "No matching fields found"
+      );
+    }
 
     renderMapping(scanResp.fields, state.mapping);
     setFillBtn(matchCount > 0);
 
   } catch (err) {
+    // Local keyword fallback — but NOT in strict exam mode. If an exam is
+    // selected, only its configured fields may be filled; keyword-guessing
+    // across the whole profile here would reintroduce exactly the false
+    // positives strict mode exists to prevent (fail closed instead).
+    const strictProfile = state.profile &&
+      Array.isArray(state.profile._exam_fields_meta) &&
+      state.profile._exam_fields_meta.length > 0;
+    if (strictProfile) {
+      setPageStatus("⚠️", "Mapping failed — check connection and Rescan.");
+      state.mapping = {};
+      renderMapping(scanResp.fields, state.mapping);
+      setFillBtn(false);
+      return;
+    }
     setPageStatus("⚠️", "Mapping failed — using basic matching.");
     // Use keyword fallback built into backend
     state.mapping = buildKeywordMapping(scanResp.fields, state.profile);
