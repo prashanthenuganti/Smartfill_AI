@@ -173,7 +173,7 @@ function scanFields() {
     if (seen.has(stableId)) return;
     seen.add(stableId);
 
-    const label = getCustomDropdownLabel(el);
+    const label = getLabel(el);
     if (!label || label.length < 2) return;
 
     fields.push({
@@ -188,42 +188,6 @@ function scanFields() {
   });
 
   return fields;
-}
-
-// ── Label detection for custom dropdown components ───────────────────────────
-// The generic getLabel() strategies all fail for components like SSC's
-// <app-dropdown>: the scanner's trigger element is a deeply-nested inner
-// div (e.g. .select-type showing "Select"), while the visible label text
-// lives in a .label div that is a sibling of the trigger's PARENT —
-// unreachable via label[for]/aria/previous-sibling/parent-child searches.
-// Confirmed structure on ssc.gov.in:
-//   <app-dropdown label="10. Year of Passing">
-//     <div class="ng-dropdown">
-//       <div class="label required">10. Year of Passing</div>
-//       <div class="value-area"><div class="select-type">Select</div>…
-// So: read the component's own label attribute first, then look for a
-// .label element within the enclosing dropdown container, and only then
-// fall back to the generic strategies.
-function getCustomDropdownLabel(el) {
-  // 1. The Angular component's own label attribute
-  const host = el.closest("app-dropdown");
-  if (host) {
-    const attr = host.getAttribute("label");
-    if (attr && clean(attr).length > 1) return clean(attr);
-  }
-
-  // 2. A label-ish element inside the enclosing dropdown container
-  const container = el.closest('app-dropdown, .ng-dropdown, [class*="dropdown" i]');
-  if (container) {
-    const lblEl = container.querySelector('label, .label, [class*="label" i]');
-    if (lblEl && lblEl !== el && !lblEl.contains(el)) {
-      const t = clean(lblEl.textContent);
-      if (t && t.length > 1) return t;
-    }
-  }
-
-  // 3. Generic 8-strategy fallback
-  return getLabel(el);
 }
 
 // ── Label detection — 8 strategies ───────────────────────────────────────────
@@ -476,59 +440,17 @@ async function fillFileInput(el, dataUrl, profileKey) {
 }
 
 // ── Select filler ─────────────────────────────────────────────────────────────
-// ── Token-overlap option matching (portal-agnostic) ──────────────────────────
-// Exact/substring matching breaks whenever the profile value and the portal's
-// option text word the same thing differently — e.g. a certificate printing
-// "Board of Secondary Education, Telangana State" vs SSC's option "Board of
-// Secondary Education Telangana" vs another portal's "Telangana State Board
-// of Secondary Education". All are the same board; none contains another as
-// a substring. Word-set overlap (Jaccard similarity) matches all of these
-// orderings/punctuations to each other while still cleanly rejecting the
-// near-miss siblings ("…Andhra Pradesh", "Central Board…(CBSE)").
-// This is intentionally generic — it applies to every dropdown on every
-// portal, not just education boards.
-function matchTokens(s) {
-  return new Set(
-    String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean)
-  );
-}
-
-function tokenSimilarity(a, b) {
-  const ta = matchTokens(a), tb = matchTokens(b);
-  if (!ta.size || !tb.size) return 0;
-  let inter = 0;
-  ta.forEach(t => { if (tb.has(t)) inter++; });
-  return inter / (ta.size + tb.size - inter); // Jaccard: intersection / union
-}
-
-// Returns the best-matching item, or null when no option is BOTH a strong
-// match (>= 0.6 overlap) AND clearly better than the runner-up (>= 0.15
-// margin). The margin requirement is what prevents force-guessing between
-// sibling options like the different state boards — a wrong dropdown value
-// on a government form is worse than an unfilled one.
-function bestTokenMatch(value, items, getText) {
-  let best = null, bestScore = 0, secondScore = 0;
-  for (const it of items) {
-    const s = tokenSimilarity(value, getText(it));
-    if (s > bestScore) { secondScore = bestScore; bestScore = s; best = it; }
-    else if (s > secondScore) { secondScore = s; }
-  }
-  if (best && bestScore >= 0.6 && bestScore - secondScore >= 0.15) return best;
-  return null;
-}
-
 function fillSelect(el, value) {
   const opts = Array.from(el.options);
   const vl = value.toLowerCase().trim();
 
-  // Priority order: exact value → exact text → partial text → token overlap
+  // Priority order: exact value → exact text → partial text
   const match =
     opts.find(o => o.value === value) ||
     opts.find(o => o.value.toLowerCase() === vl) ||
     opts.find(o => o.text.toLowerCase().trim() === vl) ||
     opts.find(o => o.text.toLowerCase().includes(vl)) ||
-    opts.find(o => vl.includes(o.text.toLowerCase().trim()) && o.text.length > 2) ||
-    bestTokenMatch(value, opts, o => o.text);
+    opts.find(o => vl.includes(o.text.toLowerCase().trim()) && o.text.length > 2);
 
   if (!match) return false;
 
@@ -585,8 +507,7 @@ async function fillCustomDropdown(triggerEl, value) {
   const findMatch = (opts) =>
     opts.find(li => clean(li.textContent).toLowerCase() === targetText) ||
     opts.find(li => clean(li.textContent).toLowerCase().includes(targetText)) ||
-    opts.find(li => targetText.includes(clean(li.textContent).toLowerCase()) && li.textContent.trim().length > 1) ||
-    bestTokenMatch(value, opts, li => clean(li.textContent));
+    opts.find(li => targetText.includes(clean(li.textContent).toLowerCase()) && li.textContent.trim().length > 1);
 
   await sleep(50);
   const freshOptions = Array.from(document.querySelectorAll("li")).filter(isVisible);
@@ -614,18 +535,7 @@ async function fillCustomDropdown(triggerEl, value) {
   const afterText = clean(triggerEl.textContent);
   console.log("[MitraFill] Trigger text after selection attempt:", afterText);
 
-  // Verify against the OPTION WE PICKED, not just the raw profile value —
-  // with token-overlap matching the chosen option's wording can legitimately
-  // differ from the profile value ("…Telangana" vs "…, Telangana State"),
-  // so requiring afterText to contain the raw value would mark a perfectly
-  // successful fill as failed.
-  const matchedText = clean(match.textContent).toLowerCase();
-  const afterLower = afterText.toLowerCase();
-  const success = afterText !== beforeText && (
-    afterLower.includes(targetText) ||
-    afterLower.includes(matchedText) ||
-    tokenSimilarity(afterText, matchedText) >= 0.6
-  );
+  const success = afterText !== beforeText && afterText.toLowerCase().includes(targetText);
   if (!success) {
     console.warn("[MitraFill] Trigger text did not update. before:", beforeText, "| after:", afterText);
   }
@@ -725,23 +635,12 @@ function waitForDropdownOptions(triggerEl, timeoutMs) {
     const start = Date.now();
 
     const tryFind = () => {
-      // Look for a list of <li> elements that became visible near the trigger.
-      // NOTE: closest("app-dropdown, div, section") is wrong here — closest()
-      // returns the NEAREST ancestor matching ANY of the selectors, which for
-      // a deeply-nested trigger is always its immediate div wrapper (e.g.
-      // .value-area), never the component root where the options list
-      // actually renders. Walk outward through progressively wider scopes
-      // instead.
+      // Look for a list of <li> elements that became visible near the trigger
       let candidates = [];
 
-      const scopes = [
-        triggerEl.closest("app-dropdown"),
-        triggerEl.closest('.ng-dropdown, [class*="dropdown" i]'),
-        triggerEl.parentElement,
-      ].filter(Boolean);
-      for (const nearby of scopes) {
+      const nearby = triggerEl.closest("app-dropdown, div, section") || triggerEl.parentElement;
+      if (nearby) {
         candidates = Array.from(nearby.querySelectorAll("li")).filter(isVisible);
-        if (candidates.length) break;
       }
 
       if (!candidates.length) {
