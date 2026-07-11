@@ -228,7 +228,14 @@ Extract:
     DocumentType.CERTIFICATE_SSC: _BASE + """
 Document: SSC / 10th Class Certificate or Marks Memo (Board Examination)
 
-Boards: BSEAP, BSEM, CBSE, ICSE, TS Board, etc.
+Common boards: Board of Secondary Education, Telangana State; Board of
+Secondary Education, Andhra Pradesh (BSEAP); CBSE; ICSE — but ALWAYS
+transcribe the exact board name as it is printed on the document. Do NOT
+guess or substitute an abbreviation or a rearranged/canonical form if the
+full name is printed — copy the printed text exactly (e.g. a certificate
+headed "Board of Secondary Education, Telangana State" must NOT be returned
+as "Telangana State Board of Secondary Education"). Only use a short form
+like "BSEAP" or "CBSE" if that is literally what is printed.
 
 Extract:
 {
@@ -238,7 +245,7 @@ Extract:
   "dob":            "Date of birth. YYYY-MM-DD.",
   "ssc_roll":       "Hall ticket number or roll number as printed.",
   "ssc_school":     "School name as printed.",
-  "ssc_board":      "Board of education. e.g. BSEAP, CBSE, ICSE.",
+  "ssc_board":      "Transcribe the board name exactly as printed at the top of the document, word for word. Do not abbreviate, rearrange, or substitute unless that is the literal printed text.",
   "ssc_year":       "Year of passing. 4-digit year only.",
   "ssc_percentage": "Overall percentage as printed. e.g. 92.5. Include % symbol.",
   "ssc_identification_mark_1": "The FIRST physical identification mark/remark printed on the memo — NOT exam marks or grades. SSC memos commonly print these as a numbered list, e.g. '1. A mole on the neck  2. A mole on left hand middle finger', or as two separate lines/fields on the document itself. Extract only the first one. Copy the exact text as printed (without the leading '1.' number). If none is printed, return null.",
