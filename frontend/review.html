@@ -610,11 +610,21 @@ function applyTransform(transform, rawVal){
   }
 }
 
+// Base (non-edited) value for an exam field. A field is EITHER derived
+// from an extracted profile key (source_profile_key + transform) OR a
+// fixed constant configured by the admin (default_value) — mirrors the
+// backend's either/or validation in exam_routes.py.
+function getExamBaseVal(field){
+  if(field.source_profile_key){
+    var raw=getVal(field.source_profile_key);
+    if(!raw)return "";
+    return applyTransform(field.transform, raw);
+  }
+  return field.default_value||"";
+}
 function getExamVal(field){
   if(examEdits[field.field_key]!==undefined)return examEdits[field.field_key];
-  var raw=getVal(field.source_profile_key);
-  if(!raw)return "";
-  return applyTransform(field.transform, raw);
+  return getExamBaseVal(field);
 }
 
 // Same source-detection logic as makeRow() below — reused here so exam
@@ -635,6 +645,15 @@ function srcPillHtml(key){
     :'';
 }
 
+// Source pill for an exam-shaped field: fixed-constant fields get a
+// "Fixed" pill (admin-configured value, not extracted from a document);
+// source-derived fields reuse the normal document pill.
+function examSrcPillHtml(field){
+  if(!field.source_profile_key&&field.default_value)
+    return '<span class="pill pill-manual" title="Admin-configured fixed value">Fixed</span>';
+  return srcPillHtml(field.source_profile_key);
+}
+
 function makeExamRow(field){
   var val=getExamVal(field);
   var edited=examEdits[field.field_key]!==undefined;
@@ -646,7 +665,7 @@ function makeExamRow(field){
     '<td class="td-v"><input class="val" id="inp-exam-'+field.field_key+'" value="'+esc(val)+'" '+
       'placeholder="Not available" oninput="onExamEdit(\''+field.field_key+'\')" /></td>'+
     '<td class="td-src" id="src-exam-'+field.field_key+'"><div class="src-wrap">'+
-      srcPillHtml(field.source_profile_key)+flagHtml+'</div></td>'+
+      examSrcPillHtml(field)+flagHtml+'</div></td>'+
     '</tr>';
 }
 
@@ -654,7 +673,7 @@ function onExamEdit(fieldKey){
   var field=examFields.find(function(f){return f.field_key===fieldKey;});
   if(!field)return;
   var inp=document.getElementById("inp-exam-"+fieldKey);
-  var original=getVal(field.source_profile_key)?applyTransform(field.transform, getVal(field.source_profile_key)):"";
+  var original=getExamBaseVal(field);
   var cur=inp.value;
   if(cur!==original)examEdits[fieldKey]=cur;
   else delete examEdits[fieldKey];
@@ -666,7 +685,7 @@ function onExamEdit(fieldKey){
   tr.className=ed?"r-edit":(field.required&&!inp.value?"r-warn":"");
   var flagHtml=ed?' <span class="edit-icon">✎</span>'
     :(field.required&&!inp.value?' <span class="warn-icon">⚠</span>':'');
-  srcTd.innerHTML='<div class="src-wrap">'+srcPillHtml(field.source_profile_key)+flagHtml+'</div>';
+  srcTd.innerHTML='<div class="src-wrap">'+examSrcPillHtml(field)+flagHtml+'</div>';
 }
 
 document.addEventListener("DOMContentLoaded",function(){
