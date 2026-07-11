@@ -466,43 +466,6 @@ async def map_fields(request: Request) -> JSONResponse:
         directly_matched_ids = set(direct_mapping.keys())
         fields = [f for f in fields if f["id"] not in directly_matched_ids]
 
-    # ── STRICT MODE ───────────────────────────────────────────────────────
-    # When an exam is selected, its configured fields are a CONTRACT: only
-    # those fields get filled, and everything else on the page is left
-    # untouched. The AI fallback below is deliberately NOT reached — a
-    # plausible-but-wrong AI guess on a government form (e.g. filling the
-    # candidate's name into "New Name / Changed Name" when the same form
-    # says name was never changed) is far worse than an empty field the
-    # operator visibly has to complete. An unmatched configured field is
-    # also a useful signal: it means the exam config has a gap or the
-    # operator is on a different page of the form.
-    #
-    # One narrow deterministic exception: photo/signature file inputs.
-    # Exam configs don't cover file uploads as fields, but <input
-    # type="file"> is unambiguous and uploading these is part of the
-    # operator's job — so map them by simple keyword, no AI involved.
-    if exam_fields_meta:
-        exam_matched = len(direct_mapping)
-        for f in fields:
-            if f.get("type") != "file":
-                continue
-            hint = ((f.get("label") or "") + " " + (f.get("name") or "")).lower()
-            if profile.get("applicant_signature") and "sign" in hint:
-                direct_mapping[f["id"]] = "applicant_signature"
-            elif profile.get("applicant_photo"):
-                direct_mapping[f["id"]] = "applicant_photo"
-        logger.info(
-            "Strict exam mode | exam fields matched=%d/%d | file inputs mapped=%d | AI fallback skipped",
-            exam_matched, len(exam_fields_meta), len(direct_mapping) - exam_matched,
-        )
-        return JSONResponse({
-            "mapping": direct_mapping,
-            "matched": len(direct_mapping),
-            "strict": True,
-            "exam_total": len(exam_fields_meta),
-            "exam_matched": exam_matched,
-        })
-
     # Synthesize a generic 'marks_identification' key for forms that have
     # ONE generic "Identification Marks" / "Visible Identification Marks"
     # field rather than separate SSC/Inter/Degree-specific ones (the common
@@ -534,6 +497,14 @@ async def map_fields(request: Request) -> JSONResponse:
 
     if not fields:
         # Nothing left for the AI, but we may still have direct matches
+        if exam_field_keys:
+            return JSONResponse({
+                "mapping": direct_mapping,
+                "matched": len(direct_mapping),
+                "strict": True,
+                "exam_total": len(exam_field_keys),
+                "exam_matched": len(direct_mapping),
+            })
         return JSONResponse({"mapping": direct_mapping, "matched": len(direct_mapping)})
 
     # Exam-specific field keys/metadata (see review.html's getFinal()) —
@@ -563,6 +534,7 @@ async def map_fields(request: Request) -> JSONResponse:
     profile_summary = "\n".join(profile_lines)
 
     exam_priority_note = ""
+    strict_mode_constraint = ""
     if exam_field_keys:
         exam_priority_note = (
             "\n\nIMPORTANT — the following profile keys were specifically "
@@ -573,6 +545,17 @@ async def map_fields(request: Request) -> JSONResponse:
             "prefer the key listed here — it was deliberately configured to "
             "be correct for this exact form, even if its name looks less "
             "standard than a generic alternative."
+        )
+        strict_mode_constraint = (
+            "\n\n*** STRICT MODE ***\n"
+            "An exam is configured for this form. YOU MAY ONLY MATCH FORM "
+            "FIELDS TO THESE PROFILE KEYS:\n"
+            "  " + ", ".join(exam_field_keys) + "\n"
+            "Do NOT match form fields to any other profile keys, even if they "
+            "seem like good matches (e.g. 'Email' should NOT match 'email' if "
+            "'email' is not in the list above — leave it unmapped instead). "
+            "A correctly-unmapped field is better than a wrongly-matched one "
+            "on a government form."
         )
 
     # Build field list for the AI
@@ -585,7 +568,7 @@ async def map_fields(request: Request) -> JSONResponse:
     prompt = f"""You are mapping HTML form fields to customer profile data for Indian government application forms.
 
 Customer Profile (only these keys exist):
-{profile_summary}{exam_priority_note}
+{profile_summary}{exam_priority_note}{strict_mode_constraint}
 
 Form Fields Found on Page:
 {field_list}
@@ -663,6 +646,28 @@ JSON now:"""
         # `fields` list the AI saw, so there's no overlap/conflict here.
         mapping.update(direct_mapping)
 
+        # STRICT MODE: if an exam is selected, only allow matches to
+        # configured exam fields. The AI prompt includes this constraint,
+        # but filter again as a safety net — better to unmatch than to
+        # silently fill a non-configured field that might contradict the
+        # form's other answers (like "New Name / Changed Name" example).
+        if exam_field_keys:
+            exam_set = set(exam_field_keys)
+            mapping = {k: v for k, v in mapping.items() if v in exam_set}
+            exam_matched = sum(1 for v in mapping.values() if v in exam_set and v not in ("applicant_photo", "applicant_signature"))
+            file_matched = sum(1 for v in mapping.values() if v in ("applicant_photo", "applicant_signature"))
+            logger.info(
+                "Strict exam mode (AI constrained) | exam fields matched=%d/%d | file inputs=%d",
+                exam_matched, len(exam_field_keys), file_matched,
+            )
+            return JSONResponse({
+                "mapping": mapping,
+                "matched": len(mapping),
+                "strict": True,
+                "exam_total": len(exam_field_keys),
+                "exam_matched": exam_matched,
+            })
+
         logger.info(
             "Field mapping | page_fields=%d | matched=%d | direct=%d",
             len(fields), len(mapping), len(direct_mapping),
@@ -674,6 +679,18 @@ JSON now:"""
         # Return keyword-based fallback, still including direct matches
         mapping = _keyword_map_fields(fields, profile)
         mapping.update(direct_mapping)
+        # Apply strict mode filter to fallback too
+        if exam_field_keys:
+            exam_set = set(exam_field_keys)
+            mapping = {k: v for k, v in mapping.items() if v in exam_set}
+            exam_matched = sum(1 for v in mapping.values() if v in exam_set and v not in ("applicant_photo", "applicant_signature"))
+            return JSONResponse({
+                "mapping": mapping,
+                "matched": len(mapping),
+                "strict": True,
+                "exam_total": len(exam_field_keys),
+                "exam_matched": exam_matched,
+            })
         return JSONResponse({"mapping": mapping, "matched": len(mapping)})
 
 
